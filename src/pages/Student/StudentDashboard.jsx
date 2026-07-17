@@ -11,6 +11,7 @@ import {
   faCalendar,
   faHistory,
   faReceipt,
+  faCreditCard,
 } from "@fortawesome/free-solid-svg-icons";
 import DashboardLayout from "../../Components/Layout/DashboardLayout";
 
@@ -51,6 +52,11 @@ export default function StudentDashboard() {
       title: "Profile",
       icon: faUser,
       path: "/student-dashboard/profile",
+    },
+    {
+      title: "Pay Online",
+      icon: faCreditCard,
+      path: "/student-dashboard/pay-online",
     },
     {
       title: "Logout",

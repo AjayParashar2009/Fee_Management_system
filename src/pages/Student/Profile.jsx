@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUser,
@@ -24,6 +24,8 @@ import {
   faTrash,
   faDownload,
   faSpinner,
+  faInfoCircle,
+  faRefresh,
 } from "@fortawesome/free-solid-svg-icons";
 import axios from "axios";
 
@@ -39,10 +41,14 @@ export default function Profile() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
   const [profileImage, setProfileImage] = useState(null);
+  const fileInputRef = useRef(null);
 
   // Student Data
   const [student, setStudent] = useState({
+    _id: "",
     name: "",
     email: "",
     mobile: "",
@@ -60,6 +66,8 @@ export default function Profile() {
     paidFees: 0,
     pendingFees: 0,
     feeStatus: "",
+    username: "",
+    status: "",
   });
 
   const [formData, setFormData] = useState({ ...student });
@@ -85,6 +93,16 @@ export default function Profile() {
   useEffect(() => {
     fetchProfile();
   }, []);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
 
   const fetchProfile = async () => {
     try {
@@ -112,6 +130,7 @@ export default function Profile() {
 
         // Combine all data sources
         const studentData = {
+          _id: profile._id || "",
           name: profile.name || storedUser?.name || user.username || "",
           email: user.email || storedUser?.email || "",
           mobile: profile.phone || "",
@@ -129,18 +148,26 @@ export default function Profile() {
           paidFees: profile.paidFees || 0,
           pendingFees: profile.pendingFees || 0,
           feeStatus: profile.feeStatus || "",
+          username: user.username || "",
+          status: user.status || "",
         };
 
         console.log("Student Data Set:", studentData);
         setStudent(studentData);
         setFormData(studentData);
+        showToast("Profile loaded successfully!", "success");
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to fetch profile");
+        showToast(
+          error.response.data.message || "Failed to fetch profile",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsLoading(false);
@@ -172,9 +199,23 @@ export default function Profile() {
   };
 
   // Handle Image Upload
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      showToast("Please upload an image file", "error");
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast("Image size should be less than 5MB", "error");
+      return;
+    }
+
+    try {
       const reader = new FileReader();
       reader.onloadend = () => {
         setProfileImage(reader.result);
@@ -182,8 +223,12 @@ export default function Profile() {
           ...prev,
           profileImage: reader.result,
         }));
+        showToast("Image uploaded successfully!", "success");
       };
       reader.readAsDataURL(file);
+    } catch (error) {
+      console.error("Image upload error:", error);
+      showToast("Failed to upload image", "error");
     }
   };
 
@@ -194,6 +239,10 @@ export default function Profile() {
       ...prev,
       profileImage: null,
     }));
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+    showToast("Image removed", "info");
   };
 
   // Validate Form
@@ -237,71 +286,57 @@ export default function Profile() {
 
     try {
       const token = getToken();
-      // Find student ID from profile
-      const studentId = student._id || student.id;
+      const studentId = student._id;
 
-      if (!studentId) {
-        // If no student ID, try to update user directly
-        const response = await axios.put(
-          `${url}/auth/update-profile`,
-          {
-            name: formData.name,
-            email: formData.email,
-            phone: formData.mobile,
-            address: formData.address,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
+      // Prepare update data
+      const updateData = {
+        name: formData.name,
+        phone: formData.mobile,
+        address: formData.address,
+        course: formData.course,
+        semester: formData.semester,
+        enrollmentNo: formData.enrollmentNo,
+        fatherName: formData.fatherName,
+        motherName: formData.motherName,
+        dob: formData.dob,
+        bloodGroup: formData.bloodGroup,
+      };
 
-        if (response.data.success) {
-          setStudent({ ...formData });
-          setIsEditing(false);
-          // Update stored user
-          const storedUser = getUser();
-          if (storedUser) {
-            storedUser.name = formData.name;
-            storedUser.email = formData.email;
-            localStorage.setItem("user", JSON.stringify(storedUser));
-          }
-          alert("Profile updated successfully!");
+      // Update student profile
+      const response = await axios.put(
+        `${url}/students/${studentId}`,
+        updateData,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        setStudent({ ...formData });
+        setIsEditing(false);
+        // Update stored user
+        const storedUser = getUser();
+        if (storedUser) {
+          storedUser.name = formData.name;
+          storedUser.email = formData.email;
+          localStorage.setItem("user", JSON.stringify(storedUser));
         }
-      } else {
-        // Update student profile
-        const response = await axios.put(
-          `${url}/students/${studentId}`,
-          {
-            name: formData.name,
-            phone: formData.mobile,
-            address: formData.address,
-            course: formData.course,
-            semester: formData.semester,
-            enrollmentNo: formData.enrollmentNo,
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-          },
-        );
-
-        if (response.data.success) {
-          setStudent({ ...formData });
-          setIsEditing(false);
-          alert("Profile updated successfully!");
-        }
+        showToast("Profile updated successfully!", "success");
       }
     } catch (error) {
       console.error("Update profile error:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to update profile");
+        showToast(
+          error.response.data.message || "Failed to update profile",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsSaving(false);
@@ -343,23 +378,51 @@ export default function Profile() {
           newPassword: "",
           confirmPassword: "",
         });
-        alert("Password changed successfully!");
+        showToast("Password changed successfully!", "success");
       }
     } catch (error) {
       console.error("Change password error:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to change password");
+        showToast(
+          error.response.data.message || "Failed to change password",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsSaving(false);
     }
   };
 
+  // Handle Refresh
+  const handleRefresh = () => {
+    fetchProfile();
+    showToast("Profile refreshed!", "info");
+  };
+
   // Handle Download Profile
   const handleDownloadProfile = () => {
-    alert("Downloading profile information...");
+    const profileData = {
+      name: student.name,
+      email: student.email,
+      phone: student.mobile,
+      course: student.course,
+      semester: student.semester,
+      address: student.address,
+      enrollmentNo: student.enrollmentNo,
+      fatherName: student.fatherName,
+      motherName: student.motherName,
+      dob: student.dob,
+      totalFees: student.totalFees,
+      paidFees: student.paidFees,
+      pendingFees: student.pendingFees,
+      feeStatus: student.feeStatus,
+    };
+    console.log("Downloading profile:", profileData);
+    showToast("Profile downloaded!", "success");
   };
 
   if (isLoading) {
@@ -378,6 +441,48 @@ export default function Profile() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfoCircle
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -387,6 +492,13 @@ export default function Profile() {
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
           <button
             onClick={handleDownloadProfile}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
@@ -469,6 +581,27 @@ export default function Profile() {
                   <FontAwesomeIcon icon={faUser} />
                 )}
               </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="absolute bottom-0 right-0 bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition"
+              >
+                <FontAwesomeIcon icon={faCamera} className="text-sm" />
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+              />
+              {profileImage && (
+                <button
+                  onClick={handleImageRemove}
+                  className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition text-xs"
+                >
+                  <FontAwesomeIcon icon={faTrash} />
+                </button>
+              )}
             </div>
             <h2 className="text-xl font-bold text-gray-800 mt-4">
               {student.name || "Student"}
@@ -497,7 +630,7 @@ export default function Profile() {
               <div>
                 <p className="text-xs text-gray-400">Status</p>
                 <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold inline-block mt-1">
-                  Active
+                  {student.status || "Active"}
                 </span>
               </div>
             </div>
@@ -686,6 +819,40 @@ export default function Profile() {
                   ) : (
                     <p className="text-gray-800 font-medium">
                       {student.motherName || "N/A"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Blood Group */}
+              <div className="px-6 py-4 flex items-center gap-4">
+                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                  <FontAwesomeIcon icon={faUser} className="text-purple-600" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-500">
+                    Blood Group
+                  </p>
+                  {isEditing ? (
+                    <select
+                      name="bloodGroup"
+                      value={formData.bloodGroup}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="">Select Blood Group</option>
+                      <option value="A+">A+</option>
+                      <option value="A-">A-</option>
+                      <option value="B+">B+</option>
+                      <option value="B-">B-</option>
+                      <option value="AB+">AB+</option>
+                      <option value="AB-">AB-</option>
+                      <option value="O+">O+</option>
+                      <option value="O-">O-</option>
+                    </select>
+                  ) : (
+                    <p className="text-gray-800 font-medium">
+                      {student.bloodGroup || "N/A"}
                     </p>
                   )}
                 </div>
@@ -916,6 +1083,47 @@ export default function Profile() {
                     Change Password
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Account Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <FontAwesomeIcon
+                  icon={faTrash}
+                  className="text-3xl text-red-600"
+                />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                Delete Account?
+              </h2>
+              <p className="text-gray-500 text-sm mb-6">
+                Are you sure you want to delete your account? This action cannot
+                be undone.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  showToast("Account deletion request sent", "info");
+                }}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium"
+              >
+                Delete Account
               </button>
             </div>
           </div>

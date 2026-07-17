@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSearch,
@@ -27,10 +27,19 @@ import {
   faUniversity,
   faMobileAlt,
   faQrcode,
-  faHistory,
-  faReceipt as faReceiptIcon,
+  faSpinner,
+  faTrash,
+  faEdit,
+  faInfoCircle,
+  faRefresh,
+  faChartBar,
+  faFileExport,
+  faPrint as faPrintIcon,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
+import axios from "axios";
+
+const url = import.meta.env.VITE_BASE_URL;
 
 export default function FeeCollection() {
   const theme = {
@@ -40,19 +49,39 @@ export default function FeeCollection() {
     text: "text-blue-600",
   };
 
+  // States
   const [searchTerm, setSearchTerm] = useState("");
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState(null);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [selectedMethod, setSelectedMethod] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
-  const [selectedStudentHistory, setSelectedStudentHistory] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteId, setDeleteId] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingCollection, setEditingCollection] = useState(null);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [sortField, setSortField] = useState("date");
+  const [sortDirection, setSortDirection] = useState("desc");
+
+  // Data states
+  const [students, setStudents] = useState([]);
+  const [collections, setCollections] = useState([]);
+  const [summaryData, setSummaryData] = useState({
+    today: { total: 0, count: 0 },
+    month: { total: 0, count: 0 },
+    pending: { total: 0, count: 0 },
+    pendingStudents: 0,
+  });
 
   // Payment Form State
   const [paymentData, setPaymentData] = useState({
@@ -62,183 +91,523 @@ export default function FeeCollection() {
     paymentMethod: "",
     date: new Date().toISOString().split("T")[0],
     note: "",
-    installment: "full",
-    installmentAmount: "",
   });
 
   const [errors, setErrors] = useState({});
 
-  // Students List
-  const [students, setStudents] = useState([
-    {
-      id: "STU001",
-      name: "Aman Kumar",
-      course: "B.Tech",
-      semester: "3rd",
-      totalFee: 100000,
-      paid: 75000,
-      pending: 25000,
-      status: "Partial",
-      phone: "9876543210",
-      email: "aman@gmail.com",
-    },
-    {
-      id: "STU002",
-      name: "Priya Sharma",
-      course: "MCA",
-      semester: "1st",
-      totalFee: 75000,
-      paid: 75000,
-      pending: 0,
-      status: "Paid",
-      phone: "9876543211",
-      email: "priya@gmail.com",
-    },
-    {
-      id: "STU003",
-      name: "Rohan Verma",
-      course: "BBA",
-      semester: "5th",
-      totalFee: 51000,
-      paid: 25500,
-      pending: 25500,
-      status: "Partial",
-      phone: "9876543212",
-      email: "rohan@gmail.com",
-    },
-    {
-      id: "STU004",
-      name: "Neha Singh",
-      course: "BCA",
-      semester: "3rd",
-      totalFee: 51000,
-      paid: 0,
-      pending: 51000,
-      status: "Pending",
-      phone: "9876543213",
-      email: "neha@gmail.com",
-    },
-  ]);
+  const getToken = () => localStorage.getItem("token");
 
   // Fee Types
   const feeTypes = [
-    { value: "tuition", label: "Tuition Fee" },
-    { value: "admission", label: "Admission Fee" },
-    { value: "exam", label: "Exam Fee" },
-    { value: "library", label: "Library Fee" },
-    { value: "other", label: "Other Fee" },
+    { value: "Tuition", label: "Tuition Fee" },
+    { value: "Admission", label: "Admission Fee" },
+    { value: "Exam", label: "Exam Fee" },
+    { value: "Library", label: "Library Fee" },
+    { value: "Other", label: "Other Fee" },
   ];
 
   // Payment Methods
   const paymentMethods = [
-    { value: "cash", label: "Cash", icon: faMoneyBillWave },
-    { value: "upi", label: "UPI", icon: faMobileAlt },
-    { value: "credit_card", label: "Credit Card", icon: faCreditCard },
-    { value: "debit_card", label: "Debit Card", icon: faCreditCard },
-    { value: "net_banking", label: "Net Banking", icon: faUniversity },
-    { value: "qr_code", label: "QR Code", icon: faQrcode },
+    { value: "Cash", label: "Cash", icon: faMoneyBillWave },
+    { value: "UPI", label: "UPI", icon: faMobileAlt },
+    { value: "Credit Card", label: "Credit Card", icon: faCreditCard },
+    { value: "Debit Card", label: "Debit Card", icon: faCreditCard },
+    { value: "Net Banking", label: "Net Banking", icon: faUniversity },
+    { value: "QR Code", label: "QR Code", icon: faQrcode },
   ];
 
-  // Collection Data
-  const [collections, setCollections] = useState([
-    {
-      receipt: "RCPT001",
-      student: "Aman Kumar",
-      course: "B.Tech",
-      amount: 25000,
-      method: "UPI",
-      date: "2024-05-20",
-      status: "Completed",
-      feeType: "Tuition Fee",
-      transactionId: "TXN123456",
-    },
-    {
-      receipt: "RCPT002",
-      student: "Priya Sharma",
-      course: "MCA",
-      amount: 18000,
-      method: "Credit Card",
-      date: "2024-05-19",
-      status: "Completed",
-      feeType: "Tuition Fee",
-      transactionId: "TXN123457",
-    },
-    {
-      receipt: "RCPT003",
-      student: "Rohan Verma",
-      course: "BBA",
-      amount: 15000,
-      method: "Net Banking",
-      date: "2024-05-18",
-      status: "Completed",
-      feeType: "Admission Fee",
-      transactionId: "TXN123458",
-    },
-    {
-      receipt: "RCPT004",
-      student: "Neha Singh",
-      course: "BCA",
-      amount: 12000,
-      method: "UPI",
-      date: "2024-05-17",
-      status: "Pending",
-      feeType: "Exam Fee",
-      transactionId: "TXN123459",
-    },
-  ]);
+  // Fetch data on mount
+  useEffect(() => {
+    fetchAllData();
+  }, []);
 
-  // Summary Cards
-  const summaryCards = [
-    {
-      title: "Today's Collection",
-      value: `₹${collections
-        .filter(
-          (c) =>
-            c.date === new Date().toISOString().split("T")[0] &&
-            c.status === "Completed",
-        )
-        .reduce((sum, c) => sum + c.amount, 0)
-        .toLocaleString()}`,
-      subtitle: `${collections.filter((c) => c.date === new Date().toISOString().split("T")[0]).length} payments today`,
-      icon: faWallet,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
+  // Fetch all data
+  const fetchAllData = async () => {
+    await Promise.all([fetchStudents(), fetchCollections(), fetchSummary()]);
+  };
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
+
+  // Fetch Students
+  const fetchStudents = async () => {
+    try {
+      const token = getToken();
+      const response = await axios.get(`${url}/students`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.success) {
+        setStudents(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching students:", error);
+    }
+  };
+
+  // Fetch Collections
+  const fetchCollections = async () => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+      const response = await axios.get(`${url}/fee-collections`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.success) {
+        setCollections(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching collections:", error);
+      setApiError("Failed to fetch collections");
+      showToast("Failed to fetch collections", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Fetch Summary
+  const fetchSummary = async () => {
+    try {
+      const token = getToken();
+      const response = await axios.get(`${url}/fee-collections/summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (response.data.success) {
+        setSummaryData(response.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching summary:", error);
+    }
+  };
+
+  // Handle Input Change
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setPaymentData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
+    }
+  };
+
+  // Handle Student Select
+  const handleStudentSelect = (e) => {
+    const studentId = e.target.value;
+    const student = students.find((s) => s._id === studentId);
+    setSelectedStudent(student);
+    setPaymentData((prev) => ({
+      ...prev,
+      studentId: studentId,
+      amount: student?.pendingFees || "",
+    }));
+  };
+
+  // Validate Form
+  const validateForm = () => {
+    const newErrors = {};
+    if (!paymentData.studentId) newErrors.studentId = "Please select a student";
+    if (!paymentData.feeType) newErrors.feeType = "Please select fee type";
+    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
+      newErrors.amount = "Please enter a valid amount";
+    }
+    if (!paymentData.paymentMethod) {
+      newErrors.paymentMethod = "Please select payment method";
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  // Handle Collect Fee
+  const handleCollectFee = async () => {
+    if (!validateForm()) return;
+
+    try {
+      setIsLoading(true);
+      setApiError("");
+      const token = getToken();
+
+      const response = await axios.post(
+        `${url}/fee-collections`,
+        {
+          studentId: paymentData.studentId,
+          feeType: paymentData.feeType,
+          amount: parseFloat(paymentData.amount),
+          paymentMethod: paymentData.paymentMethod,
+          date: paymentData.date,
+          note: paymentData.note,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        const receiptData = {
+          _id: response.data.data.receipt._id,
+          receipt: response.data.data.receipt.receiptNo,
+          student: response.data.data.feeCollection.student?.name || "Unknown",
+          course: response.data.data.feeCollection.student?.course || "N/A",
+          amount: response.data.data.feeCollection.amount,
+          method: response.data.data.feeCollection.paymentMethod,
+          date: new Date(
+            response.data.data.feeCollection.date,
+          ).toLocaleDateString("en-IN"),
+          status: "Completed",
+          feeType: response.data.data.feeCollection.feeType,
+          transactionId: response.data.data.feeCollection.transactionId,
+          pdfUrl: response.data.data.pdfUrl || null,
+        };
+
+        setSelectedReceipt(receiptData);
+        setShowReceiptModal(true);
+        setShowCollectModal(false);
+
+        await fetchAllData();
+        resetForm();
+        showToast(
+          `Fee collected successfully! Receipt: ${receiptData.receipt}`,
+          "success",
+        );
+      }
+    } catch (error) {
+      console.error("Collect fee error:", error);
+      if (error.response) {
+        setApiError(error.response.data.message || "Failed to collect fee");
+        showToast(
+          error.response.data.message || "Failed to collect fee",
+          "error",
+        );
+      } else {
+        setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Edit Collection
+  const handleEditClick = (collection) => {
+    setEditingCollection(collection);
+    setPaymentData({
+      studentId: collection.student?._id || collection.studentId || "",
+      feeType: collection.feeType || "",
+      amount: collection.amount || "",
+      paymentMethod: collection.paymentMethod || "",
+      date: collection.date
+        ? new Date(collection.date).toISOString().split("T")[0]
+        : new Date().toISOString().split("T")[0],
+      note: collection.note || "",
+    });
+    setSelectedStudent(
+      students.find(
+        (s) => s._id === (collection.student?._id || collection.studentId),
+      ),
+    );
+    setShowEditModal(true);
+    setErrors({});
+    setApiError("");
+  };
+
+  // Handle Update Collection
+  const handleUpdateCollection = async () => {
+    if (!validateForm()) return;
+
+    try {
+      setIsLoading(true);
+      setApiError("");
+      const token = getToken();
+
+      const response = await axios.put(
+        `${url}/fee-collections/${editingCollection._id}`,
+        {
+          feeType: paymentData.feeType,
+          amount: parseFloat(paymentData.amount),
+          paymentMethod: paymentData.paymentMethod,
+          date: paymentData.date,
+          note: paymentData.note,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        setShowEditModal(false);
+        setEditingCollection(null);
+        resetForm();
+        await fetchAllData();
+        showToast("Collection updated successfully!", "success");
+      }
+    } catch (error) {
+      console.error("Update collection error:", error);
+      if (error.response) {
+        setApiError(
+          error.response.data.message || "Failed to update collection",
+        );
+        showToast(
+          error.response.data.message || "Failed to update collection",
+          "error",
+        );
+      } else {
+        setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Delete Collection
+  const handleDeleteClick = (id) => {
+    setDeleteId(id);
+    setShowDeleteModal(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+
+      await axios.delete(`${url}/fee-collections/${deleteId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setShowDeleteModal(false);
+      setDeleteId(null);
+      await fetchAllData();
+      showToast("Collection deleted successfully!", "success");
+    } catch (error) {
+      console.error("Delete error:", error);
+      setApiError("Failed to delete collection");
+      showToast("Failed to delete collection", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle View Receipt
+  const handleViewReceipt = (receipt) => {
+    setSelectedReceipt(receipt);
+    setShowReceiptModal(true);
+  };
+
+  // Handle Print Receipt
+  const handlePrintReceipt = () => {
+    window.print();
+  };
+
+  // Handle Download Receipt
+  const handleDownloadReceipt = async (receipt) => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+
+      if (receipt.pdfUrl) {
+        window.open(`${url}${receipt.pdfUrl}`, "_blank");
+        return;
+      }
+
+      const response = await axios.post(
+        `${url}/receipts/${receipt._id}/generate-pdf`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (response.data.success) {
+        const downloadUrl =
+          response.data.data.downloadUrl ||
+          `${url}/receipts/${receipt._id}/download-pdf`;
+        window.open(downloadUrl, "_blank");
+        await fetchCollections();
+        showToast(
+          `Receipt ${receipt.receipt} downloaded successfully!`,
+          "success",
+        );
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      setApiError("Failed to download receipt");
+      showToast("Failed to download receipt", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Sort
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Handle Apply Filters
+  const handleApplyFilters = () => {
+    setShowFilterModal(false);
+    showToast("Filters applied successfully!", "success");
+  };
+
+  // Handle Reset Filters
+  const handleResetFilters = () => {
+    setSelectedStatus("all");
+    setSelectedMethod("all");
+    setStartDate("");
+    setEndDate("");
+    setSearchTerm("");
+    showToast("Filters reset!", "info");
+  };
+
+  // Reset Form
+  const resetForm = () => {
+    setPaymentData({
+      studentId: "",
+      feeType: "",
+      amount: "",
+      paymentMethod: "",
+      date: new Date().toISOString().split("T")[0],
+      note: "",
+    });
+    setSelectedStudent(null);
+    setErrors({});
+    setApiError("");
+    setShowEditModal(false);
+    setEditingCollection(null);
+  };
+
+  // Export Data
+  const handleExportData = () => {
+    const data = filteredCollections.map((c) => ({
+      "Receipt No": c.receipt,
+      Student: c.student,
+      Course: c.course,
+      Amount: c.amount,
+      "Payment Method": c.method,
+      Date: c.date,
+      Status: c.status,
+    }));
+    console.log("Exporting data:", data);
+    showToast("Data exported successfully!", "success");
+  };
+
+  // Get payment method icon
+  const getPaymentMethodIcon = (method) => {
+    const found = paymentMethods.find((m) => m.value === method);
+    return found ? found.icon : faCreditCard;
+  };
+
+  // Format collection data for table
+  const formatCollections = () => {
+    if (!collections || collections.length === 0) return [];
+
+    return collections.map((c) => {
+      const studentData = c.student || {};
+
+      return {
+        _id: c._id || `col-${Date.now()}-${Math.random()}`,
+        receipt:
+          c.receiptNo ||
+          `RCPT${String(c._id || "").slice(-6) || Date.now().toString().slice(-6)}`,
+        student: studentData.name || "Unknown Student",
+        course: studentData.course || "N/A",
+        amount: c.amount || 0,
+        method: c.paymentMethod || "N/A",
+        date: c.date ? new Date(c.date).toLocaleDateString("en-IN") : "N/A",
+        status: c.status || "Completed",
+        feeType: c.feeType || "Other",
+        transactionId: c.transactionId || "N/A",
+        pdfUrl: c.pdfUrl || null,
+        studentId: studentData._id || null,
+        note: c.note || "",
+        collectedBy: c.collectedBy?.username || "N/A",
+      };
+    });
+  };
+
+  // Sort collections
+  const sortCollections = (data) => {
+    return [...data].sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === "amount") {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+      }
+
+      if (sortField === "date") {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  };
+
+  // Filter collections
+  const filteredCollections = sortCollections(formatCollections()).filter(
+    (collection) => {
+      const matchesSearch =
+        collection.receipt.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        collection.student.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        collection.course.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        selectedStatus === "all" || collection.status === selectedStatus;
+      const matchesMethod =
+        selectedMethod === "all" || collection.method === selectedMethod;
+
+      // Date range filter
+      let matchesDate = true;
+      if (startDate && endDate) {
+        const colDate = new Date(collection.date);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        matchesDate = colDate >= start && colDate <= end;
+      }
+
+      return matchesSearch && matchesStatus && matchesMethod && matchesDate;
     },
-    {
-      title: "This Month",
-      value: `₹${collections
-        .filter((c) => c.status === "Completed")
-        .reduce((sum, c) => sum + c.amount, 0)
-        .toLocaleString()}`,
-      subtitle: `${collections.filter((c) => c.status === "Completed").length} payments`,
-      icon: faIndianRupeeSign,
-      color: "text-green-600",
-      bg: "bg-green-100",
-    },
-    {
-      title: "Pending Collection",
-      value: `₹${collections
-        .filter((c) => c.status === "Pending")
-        .reduce((sum, c) => sum + c.amount, 0)
-        .toLocaleString()}`,
-      subtitle: `${collections.filter((c) => c.status === "Pending").length} pending`,
-      icon: faCalendarAlt,
-      color: "text-red-600",
-      bg: "bg-red-100",
-    },
-    {
-      title: "Collection Rate",
-      value: `${Math.round(
-        (collections.filter((c) => c.status === "Completed").length /
-          collections.length) *
-          100,
-      )}%`,
-      subtitle: `${collections.filter((c) => c.status === "Completed").length} of ${collections.length}`,
-      icon: faCalculator,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
-    },
-  ];
+  );
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredCollections.slice(
+    indexOfFirstItem,
+    indexOfLastItem,
+  );
+  const totalPages = Math.ceil(filteredCollections.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   // Table Columns
   const columns = [
@@ -257,11 +626,20 @@ export default function FeeCollection() {
     {
       header: "Amount",
       accessor: "amount",
-      render: (row) => `₹${row.amount.toLocaleString()}`,
+      render: (row) => `₹${row.amount?.toLocaleString() || 0}`,
     },
     {
       header: "Payment Method",
       accessor: "method",
+      render: (row) => (
+        <span className="flex items-center gap-1">
+          <FontAwesomeIcon
+            icon={getPaymentMethodIcon(row.method)}
+            className="text-gray-400"
+          />
+          {row.method}
+        </span>
+      ),
     },
     {
       header: "Date",
@@ -288,7 +666,7 @@ export default function FeeCollection() {
       header: "Action",
       accessor: "actions",
       render: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => handleViewReceipt(row)}
             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -297,14 +675,23 @@ export default function FeeCollection() {
             <FontAwesomeIcon icon={faEye} />
           </button>
           <button
-            className="p-1.5 text-gray-600 hover:bg-gray-50 rounded-lg transition"
-            title="Print"
+            onClick={() => handleEditClick(row)}
+            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+            title="Edit"
           >
-            <FontAwesomeIcon icon={faPrint} />
+            <FontAwesomeIcon icon={faEdit} />
           </button>
           <button
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-            title="Download"
+            onClick={() => handleDeleteClick(row._id)}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+            title="Delete"
+          >
+            <FontAwesomeIcon icon={faTrash} />
+          </button>
+          <button
+            onClick={() => handleDownloadReceipt(row)}
+            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
+            title="Download PDF"
           >
             <FontAwesomeIcon icon={faDownload} />
           </button>
@@ -313,152 +700,50 @@ export default function FeeCollection() {
     },
   ];
 
-  // Handle Input Change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPaymentData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-  };
-
-  // Handle Student Select
-  const handleStudentSelect = (e) => {
-    const studentId = e.target.value;
-    const student = students.find((s) => s.id === studentId);
-    setSelectedStudent(student);
-    setPaymentData((prev) => ({
-      ...prev,
-      studentId: studentId,
-      amount: student?.pending || "",
-    }));
-  };
-
-  // Validate Form
-  const validateForm = () => {
-    const newErrors = {};
-    if (!paymentData.studentId) newErrors.studentId = "Please select a student";
-    if (!paymentData.feeType) newErrors.feeType = "Please select fee type";
-    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
-      newErrors.amount = "Please enter a valid amount";
-    }
-    if (!paymentData.paymentMethod) {
-      newErrors.paymentMethod = "Please select payment method";
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Handle Collect Fee
-  const handleCollectFee = () => {
-    if (!validateForm()) return;
-
-    setIsLoading(true);
-    setTimeout(() => {
-      const newCollection = {
-        receipt: `RCPT${String(collections.length + 1).padStart(3, "0")}`,
-        student: selectedStudent?.name || "Unknown",
-        course: selectedStudent?.course || "Unknown",
-        amount: parseFloat(paymentData.amount),
-        method: paymentData.paymentMethod,
-        date: paymentData.date,
-        status: "Completed",
-        feeType: paymentData.feeType,
-        transactionId: `TXN${Date.now()}`,
-      };
-
-      setCollections([newCollection, ...collections]);
-      setShowCollectModal(false);
-      setIsLoading(false);
-      alert(
-        `✅ Fee collected successfully!\nReceipt: ${newCollection.receipt}\nAmount: ₹${newCollection.amount.toLocaleString()}`,
-      );
-      resetForm();
-    }, 1000);
-  };
-
-  // Handle View Receipt
-  const handleViewReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowReceiptModal(true);
-  };
-
-  // Handle Print Receipt
-  const handlePrintReceipt = (receipt) => {
-    alert(`🖨️ Printing receipt ${receipt.receipt}...`);
-  };
-
-  // Handle Download Receipt
-  const handleDownloadReceipt = (receipt) => {
-    alert(`📥 Downloading receipt ${receipt.receipt} as PDF...`);
-  };
-
-  // Handle View Payment History
-  const handleViewPaymentHistory = (student) => {
-    setSelectedStudentHistory(student);
-    setShowPaymentHistory(true);
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setShowFilterModal(false);
-      alert("Filters applied successfully!");
-    }, 800);
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setStartDate("");
-    setEndDate("");
-    setSearchTerm("");
-    alert("Filters reset!");
-  };
-
-  // Reset Form
-  const resetForm = () => {
-    setPaymentData({
-      studentId: "",
-      feeType: "",
-      amount: "",
-      paymentMethod: "",
-      date: new Date().toISOString().split("T")[0],
-      note: "",
-      installment: "full",
-      installmentAmount: "",
-    });
-    setSelectedStudent(null);
-    setErrors({});
-  };
-
-  // Filter collections
-  const filteredCollections = collections.filter((collection) => {
-    const matchesSearch =
-      collection.receipt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.student.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      collection.course.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesStatus =
-      selectedStatus === "all" || collection.status === selectedStatus;
-    const matchesMethod =
-      selectedMethod === "all" || collection.method === selectedMethod;
-
-    return matchesSearch && matchesStatus && matchesMethod;
-  });
-
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfoCircle
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -468,11 +753,25 @@ export default function FeeCollection() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleExportData}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faFileExport} />
+            Export
+          </button>
+          <button
+            onClick={fetchAllData}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
           <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200">
-            Total Collected: ₹
+            Total: ₹
             {collections
               .filter((c) => c.status === "Completed")
-              .reduce((sum, c) => sum + c.amount, 0)
+              .reduce((sum, c) => sum + (c.amount || 0), 0)
               .toLocaleString()}
           </div>
           <button
@@ -485,32 +784,105 @@ export default function FeeCollection() {
         </div>
       </div>
 
+      {/* API Error */}
+      {apiError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
+          <FontAwesomeIcon
+            icon={faExclamationCircle}
+            className="text-red-500"
+          />
+          <span>{apiError}</span>
+          <button
+            onClick={() => setApiError("")}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            <FontAwesomeIcon icon={faTimes} />
+          </button>
+        </div>
+      )}
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {summaryCards.map((card, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  {card.title}
-                </p>
-                <h3 className="text-2xl font-bold text-gray-800 mt-2">
-                  {card.value}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
-              </div>
-              <div className={`p-3 rounded-xl ${card.bg}`}>
-                <FontAwesomeIcon
-                  icon={card.icon}
-                  className={`text-xl ${card.color}`}
-                />
-              </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Today's Collection
+              </p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-2">
+                ₹{summaryData.today?.total?.toLocaleString() || 0}
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                {summaryData.today?.count || 0} payments
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-blue-100">
+              <FontAwesomeIcon
+                icon={faWallet}
+                className="text-xl text-blue-600"
+              />
             </div>
           </div>
-        ))}
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">This Month</p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-2">
+                ₹{summaryData.month?.total?.toLocaleString() || 0}
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                {summaryData.month?.count || 0} payments
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-green-100">
+              <FontAwesomeIcon
+                icon={faIndianRupeeSign}
+                className="text-xl text-green-600"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Pending Collection
+              </p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-2">
+                ₹{summaryData.pending?.total?.toLocaleString() || 0}
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                {summaryData.pending?.count || 0} pending
+              </p>
+            </div>
+            <div className="p-3 rounded-xl bg-red-100">
+              <FontAwesomeIcon
+                icon={faClock}
+                className="text-xl text-red-600"
+              />
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">
+                Pending Students
+              </p>
+              <h3 className="text-2xl font-bold text-gray-800 mt-2">
+                {summaryData.pendingStudents || 0}
+              </h3>
+              <p className="text-xs text-gray-400 mt-1">Need to pay</p>
+            </div>
+            <div className="p-3 rounded-xl bg-purple-100">
+              <FontAwesomeIcon
+                icon={faUserGraduate}
+                className="text-xl text-purple-600"
+              />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -552,466 +924,85 @@ export default function FeeCollection() {
 
       {/* Collection Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <Table
-          title="Fee Collection History"
-          columns={columns}
-          data={filteredCollections}
-          showViewAll={false}
-          theme={theme}
-        />
+        <div className="overflow-x-auto">
+          <div className="max-h-[500px] overflow-y-auto">
+            {isLoading && collections.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="text-center">
+                  <FontAwesomeIcon
+                    icon={faSpinner}
+                    className="text-4xl text-blue-600 animate-spin mb-3"
+                  />
+                  <p className="text-gray-500">Loading collections...</p>
+                </div>
+              </div>
+            ) : (
+              <Table
+                title="Fee Collection History"
+                columns={columns}
+                data={currentItems}
+                showViewAll={false}
+                theme={theme}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Pagination */}
+        {filteredCollections.length > itemsPerPage && (
+          <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
+            <span className="text-gray-500">
+              Showing {indexOfFirstItem + 1} to{" "}
+              {Math.min(indexOfLastItem, filteredCollections.length)} of{" "}
+              {filteredCollections.length} entries
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => paginate(page)}
+                    className={`px-3 py-1 rounded-lg transition ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white"
+                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
           <span className="text-gray-500">
-            Showing 1 to {filteredCollections.length} of {collections.length}{" "}
-            entries
+            Total: ₹
+            {collections
+              .reduce((sum, c) => sum + (c.amount || 0), 0)
+              .toLocaleString()}
           </span>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50">
-              Previous
-            </button>
-            <button className="px-3 py-1 bg-blue-600 text-white rounded-lg">
-              1
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              2
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              3
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              Next
-            </button>
-          </div>
+          <span className="text-gray-500">
+            {filteredCollections.length} records found
+          </span>
         </div>
       </div>
 
-      {/* Collect Fee Modal */}
-      {showCollectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
-              <div>
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <FontAwesomeIcon icon={faWallet} className="text-blue-600" />
-                  Collect Fee
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  Enter payment details to collect fee
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  resetForm();
-                  setShowCollectModal(false);
-                }}
-                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              <div className="space-y-4">
-                {/* Student Selection */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Student <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="studentId"
-                    value={paymentData.studentId}
-                    onChange={handleStudentSelect}
-                    className={`w-full px-4 py-2.5 border ${errors.studentId ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition`}
-                  >
-                    <option value="">Select Student</option>
-                    {students.map((student) => (
-                      <option key={student.id} value={student.id}>
-                        {student.name} - {student.course} (Pending: ₹
-                        {student.pending.toLocaleString()})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.studentId && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {errors.studentId}
-                    </p>
-                  )}
-                </div>
-
-                {/* Student Details */}
-                {selectedStudent && (
-                  <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="text-xs text-gray-500">Name</p>
-                        <p className="font-medium text-gray-800">
-                          {selectedStudent.name}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Course</p>
-                        <p className="font-medium text-gray-800">
-                          {selectedStudent.course}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Total Fee</p>
-                        <p className="font-medium text-gray-800">
-                          ₹{selectedStudent.totalFee.toLocaleString()}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500">Pending</p>
-                        <p className="font-medium text-red-600">
-                          ₹{selectedStudent.pending.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Fee Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fee Type <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    name="feeType"
-                    value={paymentData.feeType}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 border ${errors.feeType ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition`}
-                  >
-                    <option value="">Select Fee Type</option>
-                    {feeTypes.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                  {errors.feeType && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {errors.feeType}
-                    </p>
-                  )}
-                </div>
-
-                {/* Amount */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Amount (₹) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    name="amount"
-                    value={paymentData.amount}
-                    onChange={handleInputChange}
-                    className={`w-full px-4 py-2.5 border ${errors.amount ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition`}
-                    placeholder="Enter amount"
-                  />
-                  {errors.amount && (
-                    <p className="text-red-500 text-xs mt-1">{errors.amount}</p>
-                  )}
-                  {selectedStudent && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      Max amount: ₹{selectedStudent.pending.toLocaleString()}
-                    </p>
-                  )}
-                </div>
-
-                {/* Payment Method */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Method <span className="text-red-500">*</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {paymentMethods.map((method) => (
-                      <button
-                        key={method.value}
-                        onClick={() => {
-                          setPaymentData((prev) => ({
-                            ...prev,
-                            paymentMethod: method.value,
-                          }));
-                        }}
-                        className={`p-3 border-2 rounded-xl text-center transition ${
-                          paymentData.paymentMethod === method.value
-                            ? "border-blue-600 bg-blue-50 text-blue-600"
-                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                        }`}
-                      >
-                        <FontAwesomeIcon
-                          icon={method.icon}
-                          className="text-lg"
-                        />
-                        <p className="text-xs mt-1">{method.label}</p>
-                      </button>
-                    ))}
-                  </div>
-                  {errors.paymentMethod && (
-                    <p className="text-red-500 text-xs mt-1">
-                      {errors.paymentMethod}
-                    </p>
-                  )}
-                </div>
-
-                {/* Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={paymentData.date}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                  />
-                </div>
-
-                {/* Note */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Note (Optional)
-                  </label>
-                  <textarea
-                    name="note"
-                    value={paymentData.note}
-                    onChange={handleInputChange}
-                    rows="2"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                    placeholder="Any additional notes..."
-                  ></textarea>
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="mt-6 pt-4 border-t border-gray-100 flex items-center justify-end gap-3">
-                <button
-                  onClick={() => {
-                    resetForm();
-                    setShowCollectModal(false);
-                  }}
-                  className="px-6 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleCollectFee}
-                  disabled={isLoading}
-                  className={`px-6 py-2.5 ${theme.primary} text-white rounded-xl hover:${theme.hover} transition flex items-center gap-2 font-medium shadow-sm disabled:opacity-50`}
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Processing...
-                    </>
-                  ) : (
-                    <>
-                      <FontAwesomeIcon icon={faCreditCard} />
-                      Collect Payment
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Receipt Modal */}
-      {showReceiptModal && selectedReceipt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Payment Receipt
-              </h2>
-              <button
-                onClick={() => setShowReceiptModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-
-            <div className="text-center border-b border-gray-200 pb-4">
-              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-3xl text-green-600"
-                />
-              </div>
-              <h3 className="font-bold text-lg">Payment Successful</h3>
-              <p className="text-sm text-gray-500">
-                Receipt #{selectedReceipt.receipt}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                Transaction: {selectedReceipt.transactionId}
-              </p>
-            </div>
-
-            <div className="space-y-3 py-4">
-              <div className="flex justify-between">
-                <span className="text-gray-500">Student</span>
-                <span className="font-medium">{selectedReceipt.student}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Course</span>
-                <span className="font-medium">{selectedReceipt.course}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Fee Type</span>
-                <span className="font-medium">{selectedReceipt.feeType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Amount</span>
-                <span className="font-bold text-lg text-green-600">
-                  ₹{selectedReceipt.amount.toLocaleString()}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Payment Method</span>
-                <span className="font-medium">{selectedReceipt.method}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Date</span>
-                <span className="font-medium">{selectedReceipt.date}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Status</span>
-                <span className="text-green-600 font-medium">Completed</span>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-200">
-              <button
-                onClick={() => setShowReceiptModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => handlePrintReceipt(selectedReceipt)}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-              >
-                <FontAwesomeIcon icon={faPrint} />
-                Print
-              </button>
-              <button
-                onClick={() => handleDownloadReceipt(selectedReceipt)}
-                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2"
-              >
-                <FontAwesomeIcon icon={faDownload} />
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Filter Collections
-              </h2>
-              <button
-                onClick={() => setShowFilterModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="all">All Status</option>
-                  <option value="Completed">Completed</option>
-                  <option value="Pending">Pending</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Method
-                </label>
-                <select
-                  value={selectedMethod}
-                  onChange={(e) => setSelectedMethod(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="all">All Methods</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Net Banking">Net Banking</option>
-                  <option value="Cash">Cash</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date Range
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500">From</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">To</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 mt-6">
-              <button
-                onClick={handleResetFilters}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                Reset
-              </button>
-              <button
-                onClick={handleApplyFilters}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium"
-              >
-                Apply Filters
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 flex flex-col items-center">
-            <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-            <p className="mt-3 text-gray-600 font-medium">Processing...</p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

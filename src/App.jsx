@@ -29,6 +29,7 @@ import FeeDetails from "./pages/Student/FeeDetails";
 import PaymentHistory from "./pages/Student/PaymentHistory";
 import StudentReceipts from "./pages/Student/Receipts";
 import Profile from "./pages/Student/Profile";
+import Payment from "./pages/Student/Payment";
 
 function App() {
   return (
@@ -68,9 +69,9 @@ function App() {
             <Route path="payment-history" element={<PaymentHistory />} />
             <Route path="receipts" element={<StudentReceipts />} />
             <Route path="profile" element={<Profile />} />
+            <Route path="pay-online" element={<Payment />} />
           </Route>
         </Route>
-
       </Routes>
     </Router>
   );

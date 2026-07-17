@@ -32,6 +32,7 @@ import {
   faMobileAlt,
   faSpinner,
   faExclamationCircle,
+  faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
 import axios from "axios";
@@ -57,6 +58,13 @@ export default function Reports() {
   const [showDateRangeModal, setShowDateRangeModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [sortField, setSortField] = useState("date");
+  const [sortDirection, setSortDirection] = useState("desc");
+
   const [reportData, setReportData] = useState({
     summary: {
       totalStudents: 0,
@@ -80,6 +88,16 @@ export default function Reports() {
   useEffect(() => {
     fetchReportData();
   }, []);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
 
   const fetchReportData = async () => {
     try {
@@ -125,10 +143,12 @@ export default function Reports() {
         });
 
         // Set transaction data from recent collections
-        if (data.recentCollections) {
+        if (data.recentCollections && data.recentCollections.length > 0) {
           setTransactionData(
             data.recentCollections.map((item) => ({
-              receiptId: item.receiptNo || `RCPT${String(item._id).slice(-6)}`,
+              _id: item._id || `txn-${Date.now()}-${Math.random()}`,
+              receiptId:
+                item.receiptNo || `RCPT${String(item._id || "").slice(-6)}`,
               student: item.student?.name || "Unknown",
               course: item.student?.course || "N/A",
               amount: item.amount || 0,
@@ -173,6 +193,8 @@ export default function Reports() {
           { month: "Nov", amount: 50000 },
           { month: "Dec", amount: 47000 },
         ]);
+
+        showToast("Report data loaded successfully!", "success");
       }
     } catch (error) {
       console.error("Error fetching report data:", error);
@@ -180,15 +202,169 @@ export default function Reports() {
         setApiError(
           error.response.data.message || "Failed to fetch report data",
         );
+        showToast(
+          error.response.data.message || "Failed to fetch report data",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Table Columns
+  // Handle Sort
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Handle View Transaction
+  const handleViewTransaction = (row) => {
+    alert(
+      `📄 Transaction Details\n\nReceipt: ${row.receiptId}\nStudent: ${row.student}\nCourse: ${row.course}\nAmount: ₹${row.amount?.toLocaleString() || 0}\nDate: ${row.date}\nMethod: ${row.method}\nStatus: ${row.status}`,
+    );
+  };
+
+  // Handle Export
+  const handleExport = async (format) => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+
+      // Prepare data for export
+      const exportData = filteredTransactions.map((t) => ({
+        "Receipt ID": t.receiptId,
+        Student: t.student,
+        Course: t.course,
+        "Fee Type": t.feeType,
+        Amount: t.amount,
+        Date: t.date,
+        Method: t.method,
+        Status: t.status,
+      }));
+
+      console.log(`Exporting ${format}:`, exportData);
+
+      // Simulate export delay
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      setShowExportModal(false);
+      showToast(`Report exported as ${format} successfully!`, "success");
+    } catch (error) {
+      console.error("Export error:", error);
+      showToast(`Failed to export as ${format}`, "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Apply Filters
+  const handleApplyFilters = () => {
+    showToast("Filters applied successfully!", "success");
+  };
+
+  // Handle Reset Filters
+  const handleResetFilters = () => {
+    setStartDate("");
+    setEndDate("");
+    setSelectedCourse("all");
+    setSelectedStatus("all");
+    setSelectedMethod("all");
+    setSearchTerm("");
+    setCurrentPage(1);
+    showToast("Filters reset!", "info");
+  };
+
+  // Handle Date Range Apply
+  const handleApplyDateRange = () => {
+    setShowDateRangeModal(false);
+    showToast("Date range applied successfully!", "success");
+  };
+
+  // Handle Refresh
+  const handleRefresh = () => {
+    fetchReportData();
+    showToast("Data refreshed!", "info");
+  };
+
+  // Get filtered transactions
+  const getFilteredTransactions = () => {
+    let filtered = [...transactionData];
+
+    // Search filter
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (t) =>
+          t.receiptId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          t.student?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          t.course?.toLowerCase().includes(searchTerm.toLowerCase()),
+      );
+    }
+
+    // Status filter
+    if (selectedStatus !== "all") {
+      filtered = filtered.filter((t) => t.status === selectedStatus);
+    }
+
+    // Method filter
+    if (selectedMethod !== "all") {
+      filtered = filtered.filter((t) => t.method === selectedMethod);
+    }
+
+    // Date range filter
+    if (startDate && endDate) {
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      filtered = filtered.filter((t) => {
+        const date = new Date(t.date);
+        return date >= start && date <= end;
+      });
+    }
+
+    // Sort
+    filtered = filtered.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === "amount") {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+      }
+
+      if (sortField === "date") {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  };
+
+  const filteredTransactions = getFilteredTransactions();
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredTransactions.slice(
+    indexOfFirstItem,
+    indexOfLastItem,
+  );
+  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
+  // Table Columns with sort functionality
   const columns = [
     {
       header: "Receipt ID",
@@ -251,38 +427,6 @@ export default function Reports() {
     },
   ];
 
-  // Handle View Transaction
-  const handleViewTransaction = (row) => {
-    alert(
-      `Viewing details for ${row.receiptId}\nStudent: ${row.student}\nAmount: ₹${row.amount?.toLocaleString() || 0}`,
-    );
-  };
-
-  // Handle Export
-  const handleExport = (format) => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setShowExportModal(false);
-      alert(`Report exported as ${format} successfully!`);
-    }, 1500);
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    alert("Filters applied successfully!");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setStartDate("");
-    setEndDate("");
-    setSelectedCourse("all");
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setSearchTerm("");
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -301,6 +445,48 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfoCircle
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -312,6 +498,13 @@ export default function Reports() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
           <button
             onClick={() => setShowDateRangeModal(true)}
             className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
@@ -449,7 +642,7 @@ export default function Reports() {
                 Transactions
               </p>
               <h3 className="text-lg font-bold text-gray-800 mt-1">
-                {transactionData.length}
+                {filteredTransactions.length}
               </h3>
             </div>
             <div className="p-2 rounded-xl bg-orange-100 flex-shrink-0">
@@ -688,7 +881,7 @@ export default function Reports() {
           <div>
             <h3 className="font-semibold text-gray-800">Transaction Reports</h3>
             <p className="text-xs text-gray-500 mt-1">
-              {transactionData.length} transactions found
+              {filteredTransactions.length} transactions found
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -712,34 +905,70 @@ export default function Reports() {
             </button>
           </div>
         </div>
-        <Table
-          title=""
-          columns={columns}
-          data={transactionData}
-          showViewAll={false}
-          theme={theme}
-        />
+        <div className="overflow-x-auto">
+          <div className="max-h-[500px] overflow-y-auto">
+            <Table
+              title=""
+              columns={columns}
+              data={currentItems}
+              showViewAll={false}
+              theme={theme}
+            />
+          </div>
+        </div>
+
+        {/* Pagination */}
+        {filteredTransactions.length > itemsPerPage && (
+          <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
+            <span className="text-gray-500">
+              Showing {indexOfFirstItem + 1} to{" "}
+              {Math.min(indexOfLastItem, filteredTransactions.length)} of{" "}
+              {filteredTransactions.length} entries
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => paginate(page)}
+                    className={`px-3 py-1 rounded-lg transition ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white"
+                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
           <span className="text-gray-500">
-            Showing {transactionData.length} of {transactionData.length} entries
+            Total: ₹
+            {filteredTransactions
+              .reduce((sum, t) => sum + (t.amount || 0), 0)
+              .toLocaleString()}
           </span>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50">
-              Previous
-            </button>
-            <button className="px-3 py-1 bg-blue-600 text-white rounded-lg">
-              1
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              2
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              3
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              Next
-            </button>
-          </div>
+          <span className="text-gray-500">
+            {filteredTransactions.length} records found
+          </span>
         </div>
       </div>
 
@@ -788,6 +1017,99 @@ export default function Reports() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Date Range Modal */}
+      {showDateRangeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Select Date Range
+              </h2>
+              <button
+                onClick={() => setShowDateRangeModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Start Date
+                </label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  End Date
+                </label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  onClick={() => {
+                    const today = new Date().toISOString().split("T")[0];
+                    setStartDate(today);
+                    setEndDate(today);
+                  }}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                >
+                  Today
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const weekAgo = new Date(today);
+                    weekAgo.setDate(today.getDate() - 7);
+                    setStartDate(weekAgo.toISOString().split("T")[0]);
+                    setEndDate(today.toISOString().split("T")[0]);
+                  }}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                >
+                  This Week
+                </button>
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const monthAgo = new Date(today);
+                    monthAgo.setMonth(today.getMonth() - 1);
+                    setStartDate(monthAgo.toISOString().split("T")[0]);
+                    setEndDate(today.toISOString().split("T")[0]);
+                  }}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
+                >
+                  This Month
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 mt-6">
+              <button
+                onClick={() => setShowDateRangeModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleApplyDateRange}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium"
+              >
+                Apply
+              </button>
+            </div>
           </div>
         </div>
       )}

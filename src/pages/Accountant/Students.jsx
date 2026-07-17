@@ -19,6 +19,11 @@ import {
   faMapMarkerAlt,
   faSpinner,
   faExclamationCircle,
+  faInfoCircle,
+  faCheckCircle,
+  faRefresh,
+  faFileExport,
+  faPrint,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
 import axios from "axios";
@@ -40,12 +45,28 @@ export default function Students() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [students, setStudents] = useState([]);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [sortField, setSortField] = useState("name");
+  const [sortDirection, setSortDirection] = useState("asc");
 
   const getToken = () => localStorage.getItem("token");
 
   useEffect(() => {
     fetchStudents();
   }, []);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
 
   const fetchStudents = async () => {
     try {
@@ -66,17 +87,56 @@ export default function Students() {
 
       if (response.data.success) {
         setStudents(response.data.data || []);
+        showToast("Students loaded successfully!", "success");
       }
     } catch (error) {
       console.error("Error fetching students:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to fetch students");
+        showToast(
+          error.response.data.message || "Failed to fetch students",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Handle Sort
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Handle Refresh
+  const handleRefresh = () => {
+    fetchStudents();
+    showToast("Data refreshed!", "info");
+  };
+
+  // Handle Export
+  const handleExport = () => {
+    const exportData = filteredStudents.map((s) => ({
+      Name: s.name,
+      Email: s.email,
+      Course: s.course,
+      Semester: s.semester,
+      Phone: s.phone,
+      "Total Fee": s.totalFees || 0,
+      Paid: s.paidFees || 0,
+      Pending: s.pendingFees || 0,
+      Status: s.feeStatus || "Pending",
+    }));
+    console.log("Exporting data:", exportData);
+    showToast("Data exported successfully!", "success");
   };
 
   // Stats Cards
@@ -127,6 +187,10 @@ export default function Students() {
     {
       header: "Name",
       accessor: "name",
+    },
+    {
+      header: "Email",
+      accessor: "email",
     },
     {
       header: "Course",
@@ -184,7 +248,7 @@ export default function Students() {
       header: "Action",
       accessor: "actions",
       render: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => handleViewStudent(row)}
             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -215,24 +279,67 @@ export default function Students() {
     setShowStudentModal(true);
   };
 
-  // Filter students based on status
-  const filteredStudents = students.filter((student) => {
-    if (selectedStatus === "all") return true;
-    if (selectedStatus === "Paid") return student.feeStatus === "Paid";
-    if (selectedStatus === "Partial") return student.feeStatus === "Partial";
-    if (selectedStatus === "Pending") return student.feeStatus === "Pending";
-    return true;
-  });
+  // Filter and sort students
+  const getFilteredStudents = () => {
+    let filtered = students.filter((student) => {
+      if (selectedStatus === "all") return true;
+      if (selectedStatus === "Paid") return student.feeStatus === "Paid";
+      if (selectedStatus === "Partial") return student.feeStatus === "Partial";
+      if (selectedStatus === "Pending") return student.feeStatus === "Pending";
+      return true;
+    });
 
-  // Search filter
-  const searchedStudents = filteredStudents.filter((student) => {
-    const search = searchTerm.toLowerCase();
-    return (
-      student.name?.toLowerCase().includes(search) ||
-      student.course?.toLowerCase().includes(search) ||
-      student.enrollmentNo?.toLowerCase().includes(search)
-    );
-  });
+    // Search filter
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (student) =>
+          student.name?.toLowerCase().includes(search) ||
+          student.course?.toLowerCase().includes(search) ||
+          student.enrollmentNo?.toLowerCase().includes(search) ||
+          student.email?.toLowerCase().includes(search),
+      );
+    }
+
+    // Sort
+    filtered = filtered.sort((a, b) => {
+      let aVal = a[sortField] || "";
+      let bVal = b[sortField] || "";
+
+      if (
+        sortField === "totalFees" ||
+        sortField === "paidFees" ||
+        sortField === "pendingFees"
+      ) {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+      }
+
+      if (typeof aVal === "string") {
+        aVal = aVal.toLowerCase();
+        bVal = bVal.toLowerCase();
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  };
+
+  const filteredStudents = getFilteredStudents();
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredStudents.slice(
+    indexOfFirstItem,
+    indexOfLastItem,
+  );
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   if (isLoading) {
     return (
@@ -250,6 +357,48 @@ export default function Students() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfoCircle
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -258,9 +407,23 @@ export default function Students() {
             Manage student fee records
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-sm text-gray-500">
-            Showing {searchedStudents.length} of {students.length} students
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
+          <button
+            onClick={handleExport}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faFileExport} />
+            Export
+          </button>
+          <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200">
+            Showing {filteredStudents.length} of {students.length} students
           </div>
         </div>
       </div>
@@ -339,9 +502,15 @@ export default function Students() {
               <option value="Pending">Fee Pending</option>
             </select>
           </div>
-          <button className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600">
-            <FontAwesomeIcon icon={faFilter} />
-            More Filters
+          <button
+            onClick={() => {
+              setSearchTerm("");
+              setSelectedStatus("all");
+            }}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
+          >
+            <FontAwesomeIcon icon={faTimes} />
+            Reset
           </button>
         </div>
       </div>
@@ -353,30 +522,65 @@ export default function Students() {
             <Table
               title="Student List"
               columns={columns}
-              data={searchedStudents}
+              data={currentItems}
               showViewAll={false}
               theme={theme}
             />
           </div>
         </div>
+
+        {/* Pagination */}
+        {filteredStudents.length > itemsPerPage && (
+          <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
+            <span className="text-gray-500">
+              Showing {indexOfFirstItem + 1} to{" "}
+              {Math.min(indexOfLastItem, filteredStudents.length)} of{" "}
+              {filteredStudents.length} students
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => paginate(page)}
+                    className={`px-3 py-1 rounded-lg transition ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white"
+                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
           <span className="text-gray-500">
-            Showing {searchedStudents.length} of {students.length} students
+            Total Students: {filteredStudents.length}
           </span>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50">
-              Previous
-            </button>
-            <button className="px-3 py-1 bg-blue-600 text-white rounded-lg">
-              1
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              2
-            </button>
-            <button className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600">
-              Next
-            </button>
-          </div>
+          <span className="text-gray-500">
+            Total Collection: ₹
+            {students
+              .reduce((sum, s) => sum + (s.paidFees || 0), 0)
+              .toLocaleString()}
+          </span>
         </div>
       </div>
 

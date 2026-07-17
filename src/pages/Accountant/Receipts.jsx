@@ -23,6 +23,10 @@ import {
   faQrcode,
   faSpinner,
   faExclamationCircle,
+  faInfoCircle,
+  faRefresh,
+  faTrash,
+  faEdit,
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
 import Table from "../../Components/Table/Tables";
@@ -51,12 +55,28 @@ export default function Receipts() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [receipts, setReceipts] = useState([]);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [sortField, setSortField] = useState("date");
+  const [sortDirection, setSortDirection] = useState("desc");
 
   const getToken = () => localStorage.getItem("token");
 
   useEffect(() => {
     fetchReceipts();
   }, []);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
 
   const fetchReceipts = async () => {
     try {
@@ -82,13 +102,268 @@ export default function Receipts() {
       console.error("Error fetching receipts:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to fetch receipts");
+        showToast(
+          error.response.data.message || "Failed to fetch receipts",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Handle Download Receipt PDF
+  const handleDownloadReceipt = async (receipt) => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+
+      // Check if PDF already exists
+      if (receipt.pdfUrl) {
+        window.open(`${url}${receipt.pdfUrl}`, "_blank");
+        showToast(
+          `Receipt ${receipt.receiptNo} downloaded successfully!`,
+          "success",
+        );
+        return;
+      }
+
+      // Generate PDF first
+      const response = await axios.post(
+        `${url}/receipts/${receipt._id}/generate-pdf`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (response.data.success) {
+        const downloadUrl =
+          response.data.data.downloadUrl ||
+          `${url}/receipts/${receipt._id}/download-pdf`;
+        window.open(downloadUrl, "_blank");
+        await fetchReceipts();
+        showToast(
+          `Receipt ${receipt.receiptNo} downloaded successfully!`,
+          "success",
+        );
+      }
+    } catch (error) {
+      console.error("Download error:", error);
+      showToast("Failed to download receipt", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Print Receipt
+  const handlePrintReceipt = (receipt) => {
+    setSelectedReceipt(receipt);
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  };
+
+  // Handle Print All
+  const handlePrintAll = () => {
+    window.print();
+  };
+
+  // Handle Download All
+  const handleDownloadAll = async () => {
+    try {
+      setIsLoading(true);
+      showToast("Preparing all receipts for download...", "info");
+
+      // Generate PDF for each receipt if not exists
+      const token = getToken();
+      for (const receipt of receipts) {
+        if (!receipt.pdfUrl) {
+          try {
+            await axios.post(
+              `${url}/receipts/${receipt._id}/generate-pdf`,
+              {},
+              {
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              },
+            );
+          } catch (err) {
+            console.error(
+              "Error generating PDF for receipt:",
+              receipt.receiptNo,
+            );
+          }
+        }
+      }
+
+      await fetchReceipts();
+      showToast("All receipts downloaded successfully!", "success");
+    } catch (error) {
+      console.error("Download all error:", error);
+      showToast("Failed to download all receipts", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle View Receipt
+  const handleViewReceipt = (receipt) => {
+    setSelectedReceipt(receipt);
+    setShowReceiptModal(true);
+  };
+
+  // Handle Share Receipt
+  const handleShareReceipt = (receipt) => {
+    setSelectedReceipt(receipt);
+    setShowShareModal(true);
+  };
+
+  // Handle Send Email
+  const handleSendEmail = async () => {
+    try {
+      setIsLoading(true);
+      const token = getToken();
+
+      // First ensure PDF is generated
+      if (!selectedReceipt.pdfUrl) {
+        await axios.post(
+          `${url}/receipts/${selectedReceipt._id}/generate-pdf`,
+          {},
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+        await fetchReceipts();
+      }
+
+      showToast(
+        `Receipt sent to ${selectedReceipt?.student?.email || "student"}`,
+        "success",
+      );
+      setShowShareModal(false);
+    } catch (error) {
+      console.error("Email error:", error);
+      showToast("Failed to send email", "error");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handle Send WhatsApp
+  const handleSendWhatsApp = () => {
+    const phone = selectedReceipt?.student?.phone || "";
+    const message = `Your receipt ${selectedReceipt?.receiptNo} is ready. Amount: ₹${selectedReceipt?.amount?.toLocaleString() || 0}`;
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank");
+    showToast("WhatsApp message sent!", "success");
+    setShowShareModal(false);
+  };
+
+  // Handle Copy Link
+  const handleCopyLink = () => {
+    const link = `${window.location.origin}/receipt/${selectedReceipt?.receiptNo}`;
+    navigator.clipboard.writeText(link);
+    showToast("Link copied to clipboard!", "success");
+  };
+
+  // Handle Apply Filters
+  const handleApplyFilters = () => {
+    setShowFilterModal(false);
+    showToast("Filters applied successfully!", "success");
+  };
+
+  // Handle Reset Filters
+  const handleResetFilters = () => {
+    setSelectedStatus("all");
+    setSelectedMethod("all");
+    setStartDate("");
+    setEndDate("");
+    setSearchTerm("");
+    showToast("Filters reset!", "info");
+  };
+
+  // Handle Sort
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc");
+    }
+  };
+
+  // Get filtered and sorted receipts
+  const getFilteredReceipts = () => {
+    let filtered = receipts.filter((receipt) => {
+      const matchesSearch =
+        receipt.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        receipt.student?.name
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase()) ||
+        receipt.student?.course
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+
+      const matchesStatus =
+        selectedStatus === "all" || receipt.status === selectedStatus;
+      const matchesMethod =
+        selectedMethod === "all" || receipt.paymentMethod === selectedMethod;
+
+      let matchesDate = true;
+      if (startDate && endDate) {
+        const receiptDate = new Date(receipt.date);
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        matchesDate = receiptDate >= start && receiptDate <= end;
+      }
+
+      return matchesSearch && matchesStatus && matchesMethod && matchesDate;
+    });
+
+    // Sort
+    filtered = filtered.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      if (sortField === "amount") {
+        aVal = parseFloat(aVal) || 0;
+        bVal = parseFloat(bVal) || 0;
+      }
+
+      if (sortField === "date") {
+        aVal = new Date(aVal);
+        bVal = new Date(bVal);
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return filtered;
+  };
+
+  const filteredReceipts = getFilteredReceipts();
+
+  // Pagination
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = filteredReceipts.slice(
+    indexOfFirstItem,
+    indexOfLastItem,
+  );
+  const totalPages = Math.ceil(filteredReceipts.length / itemsPerPage);
+
+  const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   // Summary Cards
   const summaryCards = [
@@ -175,7 +450,7 @@ export default function Receipts() {
       header: "Action",
       accessor: "actions",
       render: (row) => (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             onClick={() => handleViewReceipt(row)}
             className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
@@ -184,12 +459,14 @@ export default function Receipts() {
             <FontAwesomeIcon icon={faEye} />
           </button>
           <button
+            onClick={() => handlePrintReceipt(row)}
             className="p-1.5 text-gray-600 hover:bg-gray-50 rounded-lg transition"
             title="Print"
           >
             <FontAwesomeIcon icon={faPrint} />
           </button>
           <button
+            onClick={() => handleDownloadReceipt(row)}
             className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
             title="Download PDF"
           >
@@ -207,51 +484,6 @@ export default function Receipts() {
     },
   ];
 
-  // Handle View Receipt
-  const handleViewReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowReceiptModal(true);
-  };
-
-  // Handle Share Receipt
-  const handleShareReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowShareModal(true);
-  };
-
-  // Handle Download All
-  const handleDownloadAll = () => {
-    alert("Downloading all receipts as PDF...");
-  };
-
-  // Handle Send Email
-  const handleSendEmail = () => {
-    alert(`Receipt sent to ${selectedReceipt?.student?.email || "student"}`);
-    setShowShareModal(false);
-  };
-
-  // Handle Copy Link
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(
-      `https://feemanagement.com/receipt/${selectedReceipt?.receiptNo}`,
-    );
-    alert("Link copied to clipboard!");
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    setShowFilterModal(false);
-    alert("Filters applied!");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setStartDate("");
-    setEndDate("");
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -268,6 +500,48 @@ export default function Receipts() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfoCircle
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -277,6 +551,13 @@ export default function Receipts() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={fetchReceipts}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
           <select
             value={selectedPeriod}
             onChange={(e) => setSelectedPeriod(e.target.value)}
@@ -295,7 +576,10 @@ export default function Receipts() {
             <FontAwesomeIcon icon={faFilePdf} />
             Export All
           </button>
-          <button className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2">
+          <button
+            onClick={handlePrintAll}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
             <FontAwesomeIcon icon={faPrint} />
             Print
           </button>
@@ -378,7 +662,7 @@ export default function Receipts() {
             Reset
           </button>
           <div className="text-sm text-gray-500">
-            Showing {receipts.length} of {receipts.length} receipts
+            Showing {filteredReceipts.length} of {receipts.length} receipts
           </div>
         </div>
       </div>
@@ -390,21 +674,64 @@ export default function Receipts() {
             <Table
               title="All Receipts"
               columns={columns}
-              data={receipts}
+              data={currentItems}
               showViewAll={false}
               theme={theme}
             />
           </div>
         </div>
+
+        {/* Pagination */}
+        {filteredReceipts.length > itemsPerPage && (
+          <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
+            <span className="text-gray-500">
+              Showing {indexOfFirstItem + 1} to{" "}
+              {Math.min(indexOfLastItem, filteredReceipts.length)} of{" "}
+              {filteredReceipts.length} entries
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => paginate(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
+                (page) => (
+                  <button
+                    key={page}
+                    onClick={() => paginate(page)}
+                    className={`px-3 py-1 rounded-lg transition ${
+                      currentPage === page
+                        ? "bg-blue-600 text-white"
+                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ),
+              )}
+              <button
+                onClick={() => paginate(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
-          <span className="text-gray-500">
-            Showing {receipts.length} of {receipts.length} receipts
-          </span>
           <span className="text-gray-500">
             Total: ₹
             {receipts
               .reduce((sum, r) => sum + (r.amount || 0), 0)
               .toLocaleString()}
+          </span>
+          <span className="text-gray-500">
+            {filteredReceipts.length} records found
           </span>
         </div>
       </div>
@@ -495,11 +822,17 @@ export default function Receipts() {
               >
                 Close
               </button>
-              <button className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2">
+              <button
+                onClick={() => handlePrintReceipt(selectedReceipt)}
+                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+              >
                 <FontAwesomeIcon icon={faPrint} />
                 Print
               </button>
-              <button className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2">
+              <button
+                onClick={() => handleDownloadReceipt(selectedReceipt)}
+                className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2"
+              >
                 <FontAwesomeIcon icon={faDownload} />
                 Download
               </button>
@@ -544,6 +877,28 @@ export default function Receipts() {
                 <button
                   onClick={handleSendEmail}
                   className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition"
+                >
+                  Send
+                </button>
+              </div>
+
+              {/* WhatsApp */}
+              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:border-green-300 transition cursor-pointer">
+                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                  <FontAwesomeIcon
+                    icon={faWhatsapp}
+                    className="text-green-600"
+                  />
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-800">WhatsApp</p>
+                  <p className="text-xs text-gray-500">
+                    {selectedReceipt.student?.phone || "No phone"}
+                  </p>
+                </div>
+                <button
+                  onClick={handleSendWhatsApp}
+                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
                 >
                   Send
                 </button>

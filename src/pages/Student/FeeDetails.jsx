@@ -20,6 +20,8 @@ import {
   faInfoCircle,
   faSpinner,
   faTimes,
+  faInfoCircle as faInfo,
+  faRefresh,
 } from "@fortawesome/free-solid-svg-icons";
 import axios from "axios";
 
@@ -32,6 +34,9 @@ export default function FeeDetails() {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [apiError, setApiError] = useState("");
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   const [feeSummary, setFeeSummary] = useState({
     totalFee: 0,
     paidFee: 0,
@@ -42,12 +47,26 @@ export default function FeeDetails() {
   });
   const [feeBreakdown, setFeeBreakdown] = useState([]);
   const [paymentHistory, setPaymentHistory] = useState([]);
+  const [paymentData, setPaymentData] = useState({
+    amount: "",
+    method: "upi",
+  });
 
   const getToken = () => localStorage.getItem("token");
 
   useEffect(() => {
     fetchFeeDetails();
   }, []);
+
+  // Show toast notification
+  const showToast = (message, type = "success") => {
+    setToastMessage(message);
+    setToastType(type);
+    setTimeout(() => {
+      setToastMessage("");
+      setToastType("");
+    }, 3000);
+  };
 
   const fetchFeeDetails = async () => {
     try {
@@ -71,6 +90,7 @@ export default function FeeDetails() {
 
       if (response.data.success) {
         const profile = response.data.profile || {};
+        const user = response.data.user || {};
 
         setFeeSummary({
           totalFee: profile.totalFees || 0,
@@ -83,6 +103,10 @@ export default function FeeDetails() {
               ? Math.round((profile.paidFees / profile.totalFees) * 100)
               : 0,
         });
+
+        // Fetch payment history
+        await fetchPaymentHistory();
+        showToast("Fee details loaded successfully!", "success");
       }
     } catch (error) {
       console.error("Error fetching fee details:", error);
@@ -90,11 +114,44 @@ export default function FeeDetails() {
         setApiError(
           error.response.data.message || "Failed to fetch fee details",
         );
+        showToast(
+          error.response.data.message || "Failed to fetch fee details",
+          "error",
+        );
       } else {
         setApiError("Failed to connect to server");
+        showToast("Failed to connect to server", "error");
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const fetchPaymentHistory = async () => {
+    try {
+      const token = getToken();
+      const response = await axios.get(`${url}/fee-collections`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        const history = response.data.data || [];
+        setPaymentHistory(
+          history.map((item) => ({
+            receipt: item.receiptNo || `RCPT${String(item._id).slice(-6)}`,
+            date: new Date(item.date).toLocaleDateString("en-IN"),
+            amount: item.amount || 0,
+            method: item.paymentMethod || "N/A",
+            type: item.feeType || "Other",
+            status: item.status || "Success",
+            _id: item._id,
+          })),
+        );
+      }
+    } catch (error) {
+      console.error("Error fetching payment history:", error);
     }
   };
 
@@ -126,6 +183,10 @@ export default function FeeDetails() {
 
   const handlePayNow = (fee) => {
     setSelectedFee(fee);
+    setPaymentData({
+      amount: fee.due || 0,
+      method: "upi",
+    });
     setShowPaymentModal(true);
   };
 
@@ -135,20 +196,77 @@ export default function FeeDetails() {
   };
 
   const handleDownloadReceipt = (receipt) => {
-    alert(`Downloading receipt ${receipt.receipt}...`);
+    alert(`📥 Downloading receipt ${receipt.receipt}...`);
+    showToast(`Receipt ${receipt.receipt} downloaded!`, "success");
   };
 
   const handlePrintReceipt = (receipt) => {
-    alert(`Printing receipt ${receipt.receipt}...`);
+    window.print();
+    showToast(`Printing receipt ${receipt.receipt}...`, "info");
   };
 
-  const handleProcessPayment = () => {
-    alert(`Processing payment for ${selectedFee?.type}...`);
-    setShowPaymentModal(false);
+  const handlePaymentInputChange = (e) => {
+    const { name, value } = e.target;
+    setPaymentData((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
+  const handleProcessPayment = async () => {
+    try {
+      setIsProcessing(true);
+      const token = getToken();
+
+      if (!selectedFee) {
+        showToast("No fee selected", "error");
+        return;
+      }
+
+      // Call payment API
+      const response = await axios.post(
+        `${url}/fee-collections`,
+        {
+          studentId: selectedFee._id || "student-id",
+          feeType: selectedFee.type || "Tuition",
+          amount: parseFloat(paymentData.amount) || selectedFee.due,
+          paymentMethod: paymentData.method || "UPI",
+          date: new Date().toISOString().split("T")[0],
+          note: `Payment for ${selectedFee.type}`,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+
+      if (response.data.success) {
+        setShowPaymentModal(false);
+        showToast("Payment processed successfully!", "success");
+        await fetchFeeDetails();
+      }
+    } catch (error) {
+      console.error("Payment error:", error);
+      showToast(
+        error.response?.data?.message || "Failed to process payment",
+        "error",
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    fetchFeeDetails();
+    showToast("Data refreshed!", "info");
+  };
+
+  // Sample fee breakdown data (will be replaced with real API data)
   const feeBreakdownData = [
     {
+      _id: "1",
       type: "Tuition Fee",
       amount: 30000,
       paid: 15000,
@@ -158,6 +276,7 @@ export default function FeeDetails() {
       installments: 2,
     },
     {
+      _id: "2",
       type: "Library Fee",
       amount: 5000,
       paid: 5000,
@@ -167,6 +286,7 @@ export default function FeeDetails() {
       installments: 1,
     },
     {
+      _id: "3",
       type: "Exam Fee",
       amount: 10000,
       paid: 5000,
@@ -176,6 +296,7 @@ export default function FeeDetails() {
       installments: 2,
     },
     {
+      _id: "4",
       type: "Other Fee",
       amount: 5000,
       paid: 0,
@@ -183,25 +304,6 @@ export default function FeeDetails() {
       status: "Pending",
       dueDate: "2024-07-01",
       installments: 1,
-    },
-  ];
-
-  const paymentHistoryData = [
-    {
-      receipt: "RCPT010",
-      date: "2024-04-20",
-      amount: 12500,
-      method: "UPI",
-      type: "Tuition Fee",
-      status: "Success",
-    },
-    {
-      receipt: "RCPT005",
-      date: "2024-03-15",
-      amount: 12500,
-      method: "Credit Card",
-      type: "Tuition Fee",
-      status: "Success",
     },
   ];
 
@@ -221,6 +323,48 @@ export default function FeeDetails() {
 
   return (
     <div className="space-y-6">
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div
+          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
+            toastType === "success"
+              ? "bg-green-50 border border-green-200 text-green-700"
+              : toastType === "error"
+                ? "bg-red-50 border border-red-200 text-red-700"
+                : "bg-blue-50 border border-blue-200 text-blue-700"
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <FontAwesomeIcon
+              icon={
+                toastType === "success"
+                  ? faCheckCircle
+                  : toastType === "error"
+                    ? faExclamationCircle
+                    : faInfo
+              }
+              className={
+                toastType === "success"
+                  ? "text-green-500"
+                  : toastType === "error"
+                    ? "text-red-500"
+                    : "text-blue-500"
+              }
+            />
+            <p className="text-sm font-medium">{toastMessage}</p>
+            <button
+              onClick={() => {
+                setToastMessage("");
+                setToastType("");
+              }}
+              className="ml-auto text-gray-400 hover:text-gray-600"
+            >
+              <FontAwesomeIcon icon={faTimes} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Welcome Section */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -229,7 +373,14 @@ export default function FeeDetails() {
             View your complete fee breakdown
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <FontAwesomeIcon icon={faRefresh} />
+            Refresh
+          </button>
           <span
             className={`px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(feeSummary.status)}`}
           >
@@ -382,7 +533,10 @@ export default function FeeDetails() {
             <FontAwesomeIcon icon={faFileInvoice} className="text-purple-600" />
             Fee Breakdown
           </h2>
-          <button className="text-sm text-purple-600 hover:underline">
+          <button
+            onClick={() => showToast("Viewing all history", "info")}
+            className="text-sm text-purple-600 hover:underline"
+          >
             View All History
           </button>
         </div>
@@ -452,6 +606,15 @@ export default function FeeDetails() {
                         />
                       </button>
                     )}
+                    {item.status === "Paid" && (
+                      <button
+                        onClick={() => handleViewReceipt(paymentHistory[0])}
+                        className="px-4 py-2 border border-gray-200 text-gray-600 text-sm rounded-lg hover:bg-gray-50 transition flex items-center gap-1"
+                      >
+                        <FontAwesomeIcon icon={faEye} className="text-xs" />
+                        View Receipt
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -467,39 +630,89 @@ export default function FeeDetails() {
             <FontAwesomeIcon icon={faHistory} className="text-purple-600" />
             Recent Payments
           </h2>
-          <button className="text-sm text-purple-600 hover:underline">
+          <button
+            onClick={() => showToast("Viewing all payments", "info")}
+            className="text-sm text-purple-600 hover:underline"
+          >
             View All
           </button>
         </div>
         <div className="divide-y divide-gray-100">
-          {paymentHistoryData.map((payment, index) => (
-            <div
-              key={index}
-              className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <FontAwesomeIcon
-                    icon={faCheckCircle}
-                    className="text-green-600"
-                  />
+          {paymentHistory.length > 0 ? (
+            paymentHistory.map((payment, index) => (
+              <div
+                key={index}
+                className="px-6 py-3 flex items-center justify-between hover:bg-gray-50 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                    <FontAwesomeIcon
+                      icon={faCheckCircle}
+                      className="text-green-600"
+                    />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-800">{payment.type}</p>
+                    <p className="text-xs text-gray-500">
+                      {payment.receipt} • {payment.date}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-medium text-gray-800">{payment.type}</p>
-                  <p className="text-xs text-gray-500">
-                    {payment.receipt} • {payment.date}
+                <div className="text-right">
+                  <p className="font-semibold text-gray-800">
+                    ₹{payment.amount.toLocaleString()}
                   </p>
+                  <p className="text-xs text-gray-400">{payment.method}</p>
                 </div>
               </div>
-              <div className="text-right">
-                <p className="font-semibold text-gray-800">
-                  ₹{payment.amount.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-400">{payment.method}</p>
-              </div>
+            ))
+          ) : (
+            <div className="px-6 py-8 text-center text-gray-500">
+              <p>No payment history found</p>
             </div>
-          ))}
+          )}
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <button
+          onClick={() => {
+            const pendingFee = feeBreakdownData.find(
+              (f) => f.status !== "Paid",
+            );
+            if (pendingFee) {
+              handlePayNow(pendingFee);
+            } else {
+              showToast("All fees are paid!", "success");
+            }
+          }}
+          className="bg-purple-600 text-white p-4 rounded-xl hover:bg-purple-700 transition shadow-sm flex flex-col items-center gap-2"
+        >
+          <FontAwesomeIcon icon={faWallet} className="text-2xl" />
+          <span className="text-sm font-medium">Pay Now</span>
+        </button>
+        <button
+          onClick={() => showToast("Viewing receipts", "info")}
+          className="bg-blue-600 text-white p-4 rounded-xl hover:bg-blue-700 transition shadow-sm flex flex-col items-center gap-2"
+        >
+          <FontAwesomeIcon icon={faReceipt} className="text-2xl" />
+          <span className="text-sm font-medium">View Receipts</span>
+        </button>
+        <button
+          onClick={() => showToast("Viewing payment history", "info")}
+          className="bg-green-600 text-white p-4 rounded-xl hover:bg-green-700 transition shadow-sm flex flex-col items-center gap-2"
+        >
+          <FontAwesomeIcon icon={faHistory} className="text-2xl" />
+          <span className="text-sm font-medium">Payment History</span>
+        </button>
+        <button
+          onClick={() => showToast("Viewing profile", "info")}
+          className="bg-indigo-600 text-white p-4 rounded-xl hover:bg-indigo-700 transition shadow-sm flex flex-col items-center gap-2"
+        >
+          <FontAwesomeIcon icon={faUser} className="text-2xl" />
+          <span className="text-sm font-medium">Profile</span>
+        </button>
       </div>
 
       {/* Payment Modal */}
@@ -532,11 +745,17 @@ export default function FeeDetails() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Payment Method
                 </label>
-                <select className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500">
+                <select
+                  name="method"
+                  value={paymentData.method}
+                  onChange={handlePaymentInputChange}
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
+                >
                   <option value="upi">UPI</option>
                   <option value="credit">Credit Card</option>
                   <option value="debit">Debit Card</option>
                   <option value="net">Net Banking</option>
+                  <option value="cash">Cash</option>
                 </select>
               </div>
               <div>
@@ -545,8 +764,11 @@ export default function FeeDetails() {
                 </label>
                 <input
                   type="number"
-                  defaultValue={selectedFee.due}
+                  name="amount"
+                  value={paymentData.amount}
+                  onChange={handlePaymentInputChange}
                   className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
+                  placeholder="Enter amount"
                 />
               </div>
               <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
@@ -569,10 +791,96 @@ export default function FeeDetails() {
               </button>
               <button
                 onClick={handleProcessPayment}
+                disabled={isProcessing}
+                className={`flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2 ${
+                  isProcessing ? "opacity-70 cursor-not-allowed" : ""
+                }`}
+              >
+                {isProcessing ? (
+                  <>
+                    <FontAwesomeIcon
+                      icon={faSpinner}
+                      className="animate-spin"
+                    />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <FontAwesomeIcon icon={faCreditCard} />
+                    Pay Now
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {showReceiptModal && selectedReceipt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Payment Receipt
+              </h2>
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+              </button>
+            </div>
+            <div className="text-center border-b border-gray-200 pb-4">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <FontAwesomeIcon
+                  icon={faCheckCircle}
+                  className="text-3xl text-green-600"
+                />
+              </div>
+              <h3 className="font-bold text-lg">Payment Successful</h3>
+              <p className="text-sm text-gray-500">
+                Receipt #{selectedReceipt.receipt}
+              </p>
+            </div>
+            <div className="space-y-3 py-4">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Date</span>
+                <span className="font-medium">{selectedReceipt.date}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Type</span>
+                <span className="font-medium">{selectedReceipt.type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-bold text-green-600">
+                  ₹{selectedReceipt.amount.toLocaleString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Method</span>
+                <span className="font-medium">{selectedReceipt.method}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status</span>
+                <span className="text-green-600 font-medium">Success</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => handlePrintReceipt(selectedReceipt)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium flex items-center justify-center gap-2"
+              >
+                <FontAwesomeIcon icon={faPrint} />
+                Print
+              </button>
+              <button
+                onClick={() => handleDownloadReceipt(selectedReceipt)}
                 className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium flex items-center justify-center gap-2"
               >
-                <FontAwesomeIcon icon={faCreditCard} />
-                Pay Now
+                <FontAwesomeIcon icon={faDownload} />
+                Download
               </button>
             </div>
           </div>

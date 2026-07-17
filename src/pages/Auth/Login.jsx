@@ -5,11 +5,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUser,
   faLock,
-  faChevronDown,
   faSpinner,
-  faGraduationCap,
-  faUserTie,
-  faUserShield,
   faEye,
   faEyeSlash,
   faArrowLeft,
@@ -21,37 +17,13 @@ export default function Login() {
   const [loginData, setLoginData] = useState({
     username: "",
     password: "",
-    role: "",
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [apiError, setApiError] = useState("");
 
   const navigate = useNavigate();
-
-  // Role options with icons
-  const roles = [
-    {
-      value: "student",
-      label: "Student",
-      icon: faGraduationCap,
-      color: "text-purple-400",
-    },
-    {
-      value: "accountant",
-      label: "Accountant",
-      icon: faUserTie,
-      color: "text-blue-400",
-    },
-    {
-      value: "admin",
-      label: "Administrator",
-      icon: faUserShield,
-      color: "text-emerald-400",
-    },
-  ];
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,15 +31,6 @@ export default function Login() {
     setApiError("");
     if (errors[name]) {
       setErrors({ ...errors, [name]: "" });
-    }
-  };
-
-  const handleRoleSelect = (role) => {
-    setLoginData({ ...loginData, role: role.value });
-    setRoleDropdownOpen(false);
-    setApiError("");
-    if (errors.role) {
-      setErrors({ ...errors, role: "" });
     }
   };
 
@@ -86,10 +49,6 @@ export default function Login() {
       formError.password = "Password must be at least 6 characters";
     }
 
-    if (!loginData.role) {
-      formError.role = "Please select a role";
-    }
-
     setErrors(formError);
 
     if (Object.keys(formError).length === 0) {
@@ -102,21 +61,21 @@ export default function Login() {
     setApiError("");
 
     axios
-      .post(`${url}/auth/login`, loginData)
+      .post(`${url}/auth/login`, loginData) // ✅ No role in request
       .then((res) => {
         console.log("Full Response:", res);
         console.log("Response Data:", res.data);
 
         const { success, message, token, user } = res.data;
 
-        // ✅ CRITICAL FIX: Check if login was successful
         if (success === true) {
-          // Store token and user data
           localStorage.setItem("token", token);
           localStorage.setItem("user", JSON.stringify(user));
 
-          // Navigate based on role
-          switch (loginData.role) {
+          // ✅ Navigate based on role from response
+          const userRole = user.role;
+
+          switch (userRole) {
             case "admin":
               navigate("/admin-dashboard");
               break;
@@ -130,7 +89,6 @@ export default function Login() {
               navigate("/");
           }
         } else {
-          // ❌ Login failed - show error message
           setApiError(message || "Login failed. Please try again.");
         }
       })
@@ -138,13 +96,11 @@ export default function Login() {
         console.error("Login Error:", error);
 
         if (error.response) {
-          // Server responded with error
           const errorMessage =
             error.response.data?.message || "Login failed. Please try again.";
           setApiError(errorMessage);
           console.log("Error from server:", error.response.data);
         } else if (error.request) {
-          // Request made but no response
           setApiError(
             "Cannot connect to server. Please check your connection.",
           );
@@ -171,21 +127,6 @@ export default function Login() {
     navigate("/");
   };
 
-  const getRoleIcon = () => {
-    const selected = roles.find((r) => r.value === loginData.role);
-    return selected ? selected.icon : faUser;
-  };
-
-  const getRoleLabel = () => {
-    const selected = roles.find((r) => r.value === loginData.role);
-    return selected ? selected.label : "Select Role";
-  };
-
-  const getRoleColor = () => {
-    const selected = roles.find((r) => r.value === loginData.role);
-    return selected ? selected.color : "text-white/50";
-  };
-
   return (
     <div
       className="min-h-screen flex justify-center items-center bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 bg-[url('https://images.unsplash.com/20/cambridge.JPG?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8dW5pdmVyc2l0eSUyMGJ1aWxkaW5nfGVufDB8fDB8fHww')] bg-cover bg-center bg-blend-overlay"
@@ -208,7 +149,7 @@ export default function Login() {
             <p className="text-white/70 text-sm">Sign in to your account</p>
           </div>
 
-          {/* ✅ API Error Message - Shows when login fails */}
+          {/* API Error Message */}
           {apiError && (
             <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-xl text-red-200 text-sm flex items-center gap-2">
               <svg
@@ -315,92 +256,6 @@ export default function Login() {
                     />
                   </svg>
                   {errors.password}
-                </p>
-              )}
-            </div>
-
-            {/* Role Selection */}
-            <div>
-              <label className="block text-white font-medium text-sm mb-2">
-                Select Role
-              </label>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                  className={`w-full bg-white/10 text-white border rounded-xl h-12 px-4 pr-12 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200 ${
-                    errors.role
-                      ? "border-red-400 ring-1 ring-red-400"
-                      : "border-white/20 hover:border-blue-400"
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <FontAwesomeIcon
-                      icon={getRoleIcon()}
-                      className={getRoleColor()}
-                    />
-                    <span
-                      className={
-                        loginData.role ? "text-white" : "text-white/50"
-                      }
-                    >
-                      {getRoleLabel()}
-                    </span>
-                  </div>
-                  <FontAwesomeIcon
-                    icon={faChevronDown}
-                    className={`text-white/50 transition-transform duration-200 ${roleDropdownOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {roleDropdownOpen && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl overflow-hidden z-10 shadow-xl">
-                    {roles.map((role) => (
-                      <button
-                        key={role.value}
-                        type="button"
-                        onClick={() => handleRoleSelect(role)}
-                        className={`w-full px-4 py-3 flex items-center gap-3 hover:bg-white/10 transition text-white ${
-                          loginData.role === role.value ? "bg-white/20" : ""
-                        }`}
-                      >
-                        <FontAwesomeIcon
-                          icon={role.icon}
-                          className={role.color}
-                        />
-                        <span>{role.label}</span>
-                        {loginData.role === role.value && (
-                          <svg
-                            className="w-4 h-4 ml-auto text-blue-400"
-                            fill="currentColor"
-                            viewBox="0 0 20 20"
-                          >
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {errors.role && (
-                <p className="text-red-400 text-xs mt-1 flex items-center">
-                  <svg
-                    className="w-3 h-3 mr-1"
-                    fill="currentColor"
-                    viewBox="0 0 20 20"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                  {errors.role}
                 </p>
               )}
             </div>
