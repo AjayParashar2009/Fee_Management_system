@@ -4,7 +4,7 @@ import toast from "react-hot-toast";
 
 // ✅ Use relative URL - will work with proxy
 const API = axios.create({
-  baseURL: "/api", // This will proxy to http://localhost:3000/api
+  baseURL: "https://your-backend-url.onrender.com/api", // This will proxy to http://localhost:3000/api
   headers: {
     "Content-Type": "application/json",
   },
