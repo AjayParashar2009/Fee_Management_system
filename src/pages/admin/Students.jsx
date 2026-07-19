@@ -30,9 +30,7 @@ import {
   faSpinner,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { studentService } from "../../services/studentService"; 
 
 export default function Students() {
   const theme = {
@@ -52,8 +50,6 @@ export default function Students() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState("");
   const [students, setStudents] = useState([]);
-
-  const getToken = () => localStorage.getItem("token");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -78,11 +74,11 @@ export default function Students() {
     fetchStudents();
   }, []);
 
-  // Fetch students from API
+  // ✅ Fetch students using studentService
   const fetchStudents = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -90,19 +86,16 @@ export default function Students() {
         return;
       }
 
-      const response = await axios.get(`${url}/students`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      console.log("📤 Fetching students from API...");
+      const response = await studentService.getAll();
 
-      console.log("Students Response:", response.data);
+      console.log("✅ Students Response:", response.data);
 
       if (response.data.success) {
         setStudents(response.data.data || []);
       }
     } catch (error) {
-      console.error("Error fetching students:", error);
+      console.error("❌ Error fetching students:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to fetch students");
       } else {
@@ -241,19 +234,12 @@ export default function Students() {
     setApiError("");
   };
 
-  // Handle Delete Click
+  // ✅ Handle Delete using studentService
   const handleDeleteClick = async (id) => {
     if (window.confirm("Are you sure you want to delete this student?")) {
       try {
         setIsLoading(true);
-        const token = getToken();
-
-        await axios.delete(`${url}/students/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
+        await studentService.delete(id);
         await fetchStudents();
         alert("Student deleted successfully!");
       } catch (error) {
@@ -378,7 +364,7 @@ export default function Students() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle Add Student Submit
+  // ✅ Handle Add Student using studentService
   const handleAddSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -387,7 +373,7 @@ export default function Students() {
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -408,16 +394,11 @@ export default function Students() {
         dob: formData.dob || "",
       };
 
-      console.log("Creating student:", studentData);
+      console.log("📤 Creating student:", studentData);
 
-      const response = await axios.post(`${url}/students`, studentData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await studentService.create(studentData);
 
-      console.log("Add Student Response:", response.data);
+      console.log("✅ Add Student Response:", response.data);
 
       if (response.data.success) {
         setGeneratedCredentials({
@@ -446,7 +427,7 @@ export default function Students() {
         setApiError(response.data.message || "Failed to add student");
       }
     } catch (error) {
-      console.error("Add student error:", error);
+      console.error("❌ Add student error:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to add student");
       } else {
@@ -457,7 +438,7 @@ export default function Students() {
     }
   };
 
-  // Handle Edit Student Submit
+  // ✅ Handle Edit Student using studentService
   const handleEditSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -466,7 +447,7 @@ export default function Students() {
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -492,16 +473,7 @@ export default function Students() {
 
       const studentId = editingStudent._id || editingStudent.id;
 
-      const response = await axios.put(
-        `${url}/students/${studentId}`,
-        studentData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const response = await studentService.update(studentId, studentData);
 
       if (response.data.success) {
         setShowEditModal(false);
@@ -513,7 +485,7 @@ export default function Students() {
         setApiError(response.data.message || "Failed to update student");
       }
     } catch (error) {
-      console.error("Edit student error:", error);
+      console.error("❌ Edit student error:", error);
       if (error.response) {
         setApiError(error.response.data.message || "Failed to update student");
       } else {
