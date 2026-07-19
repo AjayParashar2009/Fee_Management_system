@@ -62,7 +62,7 @@ export default function Login() {
     setApiError("");
 
     axios
-      .post(`${url}/api/auth/login`, loginData)
+      .post(`${url}/auth/login`, loginData)
       .then((res) => {
         console.log("Full Response:", res);
         console.log("Response Data:", res.data);
