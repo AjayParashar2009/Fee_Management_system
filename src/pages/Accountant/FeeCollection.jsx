@@ -1,47 +1,35 @@
+// src/pages/Accountant/FeeCollection.jsx
 import React, { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSearch,
-  faPlus,
-  faPrint,
-  faDownload,
-  faEye,
-  faIndianRupeeSign,
-  faCalendarAlt,
-  faUser,
-  faCreditCard,
-  faWallet,
-  faTimes,
-  faSave,
-  faUserGraduate,
-  faFileInvoice,
-  faCheckCircle,
-  faClock,
-  faExclamationCircle,
-  faFilter,
-  faPhone,
-  faEnvelope,
-  faReceipt,
-  faCalculator,
-  faMoneyBillWave,
-  faUniversity,
-  faMobileAlt,
-  faQrcode,
-  faSpinner,
-  faTrash,
-  faEdit,
-  faInfoCircle,
-  faRefresh,
-  faChartBar,
-  faFileExport,
-  faPrint as faPrintIcon,
-} from "@fortawesome/free-solid-svg-icons";
+  Search,
+  Plus,
+  Filter,
+  Eye,
+  Download,
+  Printer,
+  X,
+  Save,
+  User,
+  Calendar,
+  CreditCard,
+  Wallet,
+  Phone,
+  Mail,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  Trash,
+  Edit,
+  IndianRupee,
+  UserPlus,
+  Clock,
+  Users, // ✅ Clock added
+} from "lucide-react";
 import Table from "../../Components/Table/Tables";
-import { feeService } from "../../services/feeService";
-import { studentService } from "../../services/studentService";
-import { receiptService } from "../../services/receiptService";
+import { collectionAPI, studentAPI } from "../../api";
+import toast from "react-hot-toast";
 
-export default function FeeCollection() {
+const FeeCollection = () => {
   const theme = {
     primary: "bg-blue-600",
     hover: "hover:bg-blue-500",
@@ -49,33 +37,34 @@ export default function FeeCollection() {
     text: "text-blue-600",
   };
 
-  // States
+  // State
+  const [collections, setCollections] = useState([]);
+  const [filteredCollections, setFilteredCollections] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCollectModal, setShowCollectModal] = useState(false);
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [selectedReceipt, setSelectedReceipt] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [apiError, setApiError] = useState("");
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedMethod, setSelectedMethod] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedCollection, setSelectedCollection] = useState(null);
   const [deleteId, setDeleteId] = useState(null);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingCollection, setEditingCollection] = useState(null);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [apiError, setApiError] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState("date");
-  const [sortDirection, setSortDirection] = useState("desc");
 
-  // Data states
-  const [students, setStudents] = useState([]);
-  const [collections, setCollections] = useState([]);
+  // Form State
+  const [formData, setFormData] = useState({
+    studentId: "",
+    feeType: "Tuition",
+    amount: "",
+    paymentMethod: "Cash",
+    date: new Date().toISOString().split("T")[0],
+    note: "",
+  });
+  const [errors, setErrors] = useState({});
+
+  // Summary Data
   const [summaryData, setSummaryData] = useState({
     today: { total: 0, count: 0 },
     month: { total: 0, count: 0 },
@@ -83,62 +72,44 @@ export default function FeeCollection() {
     pendingStudents: 0,
   });
 
-  // Payment Form State
-  const [paymentData, setPaymentData] = useState({
-    studentId: "",
-    feeType: "",
-    amount: "",
-    paymentMethod: "",
-    date: new Date().toISOString().split("T")[0],
-    note: "",
-  });
-
-  const [errors, setErrors] = useState({});
-
-  // Fee Types
-  const feeTypes = [
-    { value: "Tuition", label: "Tuition Fee" },
-    { value: "Admission", label: "Admission Fee" },
-    { value: "Exam", label: "Exam Fee" },
-    { value: "Library", label: "Library Fee" },
-    { value: "Other", label: "Other Fee" },
-  ];
-
-  // Payment Methods
-  const paymentMethods = [
-    { value: "Cash", label: "Cash", icon: faMoneyBillWave },
-    { value: "UPI", label: "UPI", icon: faMobileAlt },
-    { value: "Credit Card", label: "Credit Card", icon: faCreditCard },
-    { value: "Debit Card", label: "Debit Card", icon: faCreditCard },
-    { value: "Net Banking", label: "Net Banking", icon: faUniversity },
-    { value: "QR Code", label: "QR Code", icon: faQrcode },
-  ];
-
-  // Fetch data on mount
   useEffect(() => {
     fetchAllData();
   }, []);
 
-  // Fetch all data
+  useEffect(() => {
+    filterCollections();
+  }, [searchTerm, collections]);
+
   const fetchAllData = async () => {
-    await Promise.all([fetchStudents(), fetchCollections(), fetchSummary()]);
+    try {
+      setLoading(true);
+      await Promise.all([fetchCollections(), fetchStudents(), fetchSummary()]);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Show toast notification
-  const showToast = (message, type = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage("");
-      setToastType("");
-    }, 3000);
+  const fetchCollections = async () => {
+    try {
+      const response = await collectionAPI.getAll();
+      if (response.data.success) {
+        setCollections(response.data.data || []);
+        setFilteredCollections(response.data.data || []);
+      }
+    } catch (error) {
+      console.error("Error fetching collections:", error);
+      toast.error(
+        error.response?.data?.message || "Failed to load collections",
+      );
+    }
   };
 
-  // ✅ Fetch Students using studentService
   const fetchStudents = async () => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await studentService.getAll();
+      const response = await studentAPI.getAll();
       if (response.data.success) {
         setStudents(response.data.data || []);
       }
@@ -147,27 +118,9 @@ export default function FeeCollection() {
     }
   };
 
-  // ✅ Fetch Collections using feeService
-  const fetchCollections = async () => {
-    try {
-      setIsLoading(true);
-      const response = await feeService.getAll();
-      if (response.data.success) {
-        setCollections(response.data.data || []);
-      }
-    } catch (error) {
-      console.error("Error fetching collections:", error);
-      setApiError("Failed to fetch collections");
-      showToast("Failed to fetch collections", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ✅ Fetch Summary using feeService
   const fetchSummary = async () => {
     try {
-      const response = await feeService.getSummary();
+      const response = await collectionAPI.getSummary();
       if (response.data.success) {
         setSummaryData(response.data.data);
       }
@@ -176,249 +129,213 @@ export default function FeeCollection() {
     }
   };
 
-  // Handle Input Change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPaymentData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
+  const filterCollections = () => {
+    if (!searchTerm.trim()) {
+      setFilteredCollections(collections);
+      return;
     }
+    const term = searchTerm.toLowerCase();
+    const filtered = collections.filter(
+      (c) =>
+        c.receiptNo?.toLowerCase().includes(term) ||
+        c.feeType?.toLowerCase().includes(term) ||
+        c.paymentMethod?.toLowerCase().includes(term) ||
+        c.student?.name?.toLowerCase().includes(term),
+    );
+    setFilteredCollections(filtered);
   };
 
-  // Handle Student Select
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+    if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+  };
+
   const handleStudentSelect = (e) => {
     const studentId = e.target.value;
     const student = students.find((s) => s._id === studentId);
-    setSelectedStudent(student);
-    setPaymentData((prev) => ({
+    setFormData((prev) => ({
       ...prev,
       studentId: studentId,
-      amount: student?.pendingFees || "",
+      amount: student?.pendingFees?.toString() || "",
     }));
   };
 
-  // Validate Form
   const validateForm = () => {
     const newErrors = {};
-    if (!paymentData.studentId) newErrors.studentId = "Please select a student";
-    if (!paymentData.feeType) newErrors.feeType = "Please select fee type";
-    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
+    if (!formData.studentId) newErrors.studentId = "Please select a student";
+    if (!formData.feeType) newErrors.feeType = "Please select fee type";
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
       newErrors.amount = "Please enter a valid amount";
     }
-    if (!paymentData.paymentMethod) {
+    if (!formData.paymentMethod)
       newErrors.paymentMethod = "Please select payment method";
-    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ Handle Collect Fee using feeService
-  const handleCollectFee = async () => {
+  const handleCollectFee = async (e) => {
+    e.preventDefault();
     if (!validateForm()) return;
 
+    setIsSaving(true);
+    setApiError("");
     try {
-      setIsLoading(true);
-      setApiError("");
-
-      const response = await feeService.create({
-        studentId: paymentData.studentId,
-        feeType: paymentData.feeType,
-        amount: parseFloat(paymentData.amount),
-        paymentMethod: paymentData.paymentMethod,
-        date: paymentData.date,
-        note: paymentData.note,
+      const response = await collectionAPI.create({
+        studentId: formData.studentId,
+        feeType: formData.feeType,
+        amount: parseFloat(formData.amount),
+        paymentMethod: formData.paymentMethod,
+        date: formData.date,
+        note: formData.note,
       });
 
       if (response.data.success) {
-        const receiptData = {
-          _id: response.data.data.receipt._id,
-          receipt: response.data.data.receipt.receiptNo,
-          student: response.data.data.feeCollection.student?.name || "Unknown",
-          course: response.data.data.feeCollection.student?.course || "N/A",
-          amount: response.data.data.feeCollection.amount,
-          method: response.data.data.feeCollection.paymentMethod,
-          date: new Date(
-            response.data.data.feeCollection.date,
-          ).toLocaleDateString("en-IN"),
-          status: "Completed",
-          feeType: response.data.data.feeCollection.feeType,
-          transactionId: response.data.data.feeCollection.transactionId,
-          pdfUrl: response.data.data.pdfUrl || null,
-        };
-
-        setSelectedReceipt(receiptData);
-        setShowReceiptModal(true);
-        setShowCollectModal(false);
-
         await fetchAllData();
         resetForm();
-        showToast(
-          `Fee collected successfully! Receipt: ${receiptData.receipt}`,
-          "success",
-        );
+        setShowCollectModal(false);
+        toast.success("✅ Fee collected successfully!");
+
+        if (response.data.data) {
+          setSelectedCollection(response.data.data);
+          setShowReceiptModal(true);
+        }
       }
     } catch (error) {
       console.error("Collect fee error:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to collect fee");
-        showToast(
-          error.response.data.message || "Failed to collect fee",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      setApiError(error.response?.data?.message || "Failed to collect fee");
+      toast.error(error.response?.data?.message || "Failed to collect fee");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
-  // ✅ Handle Update Collection using feeService
-  const handleUpdateCollection = async () => {
-    if (!validateForm()) return;
-
+  const handleDelete = async () => {
+    setIsSaving(true);
     try {
-      setIsLoading(true);
-      setApiError("");
-
-      const response = await feeService.update(editingCollection._id, {
-        feeType: paymentData.feeType,
-        amount: parseFloat(paymentData.amount),
-        paymentMethod: paymentData.paymentMethod,
-        date: paymentData.date,
-        note: paymentData.note,
-      });
-
-      if (response.data.success) {
-        setShowEditModal(false);
-        setEditingCollection(null);
-        resetForm();
-        await fetchAllData();
-        showToast("Collection updated successfully!", "success");
-      }
-    } catch (error) {
-      console.error("Update collection error:", error);
-      if (error.response) {
-        setApiError(
-          error.response.data.message || "Failed to update collection",
-        );
-        showToast(
-          error.response.data.message || "Failed to update collection",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // ✅ Handle Delete Collection using feeService
-  const handleDeleteConfirm = async () => {
-    try {
-      setIsLoading(true);
-      await feeService.delete(deleteId);
+      await collectionAPI.delete(deleteId);
+      await fetchAllData();
       setShowDeleteModal(false);
       setDeleteId(null);
-      await fetchAllData();
-      showToast("Collection deleted successfully!", "success");
+      toast.success("✅ Collection deleted successfully!");
     } catch (error) {
       console.error("Delete error:", error);
-      setApiError("Failed to delete collection");
-      showToast("Failed to delete collection", "error");
+      toast.error("Failed to delete collection");
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
-  // ✅ Handle Download Receipt using receiptService
-  const handleDownloadReceipt = async (receipt) => {
-    try {
-      setIsLoading(true);
-
-      if (receipt.pdfUrl) {
-        window.open(
-          `${import.meta.env.VITE_BASE_URL}${receipt.pdfUrl}`,
-          "_blank",
-        );
-        return;
-      }
-
-      const response = await receiptService.generatePDF(receipt._id);
-
-      if (response.data.success) {
-        const downloadUrl =
-          response.data.data.downloadUrl ||
-          `${import.meta.env.VITE_BASE_URL}/receipts/${receipt._id}/download-pdf`;
-        window.open(downloadUrl, "_blank");
-        await fetchCollections();
-        showToast(
-          `Receipt ${receipt.receipt} downloaded successfully!`,
-          "success",
-        );
-      }
-    } catch (error) {
-      console.error("Download error:", error);
-      setApiError("Failed to download receipt");
-      showToast("Failed to download receipt", "error");
-    } finally {
-      setIsLoading(false);
-    }
+  const resetForm = () => {
+    setFormData({
+      studentId: "",
+      feeType: "Tuition",
+      amount: "",
+      paymentMethod: "Cash",
+      date: new Date().toISOString().split("T")[0],
+      note: "",
+    });
+    setErrors({});
+    setApiError("");
   };
-  return (
-    <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
-            toastType === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : toastType === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-blue-50 border border-blue-200 text-blue-700"
+
+  // Pagination
+  const totalPages = Math.ceil(filteredCollections.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = filteredCollections.slice(
+    startIndex,
+    startIndex + itemsPerPage,
+  );
+
+  const columns = [
+    {
+      header: "Receipt",
+      accessor: "receiptNo",
+      render: (row) => (
+        <span className="font-mono font-semibold">{row.receiptNo}</span>
+      ),
+    },
+    {
+      header: "Student",
+      accessor: "student",
+      render: (row) => row.student?.name || "N/A",
+    },
+    { header: "Fee Type", accessor: "feeType" },
+    {
+      header: "Amount",
+      accessor: "amount",
+      render: (row) => (
+        <span className="font-semibold text-blue-600">
+          ₹{row.amount?.toLocaleString() || 0}
+        </span>
+      ),
+    },
+    { header: "Method", accessor: "paymentMethod" },
+    {
+      header: "Date",
+      accessor: "date",
+      render: (row) => new Date(row.date).toLocaleDateString(),
+    },
+    {
+      header: "Status",
+      accessor: "status",
+      render: (row) => (
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            row.status === "Completed"
+              ? "bg-green-100 text-green-700"
+              : row.status === "Pending"
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-red-100 text-red-700"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <FontAwesomeIcon
-              icon={
-                toastType === "success"
-                  ? faCheckCircle
-                  : toastType === "error"
-                    ? faExclamationCircle
-                    : faInfoCircle
-              }
-              className={
-                toastType === "success"
-                  ? "text-green-500"
-                  : toastType === "error"
-                    ? "text-red-500"
-                    : "text-blue-500"
-              }
-            />
-            <p className="text-sm font-medium">{toastMessage}</p>
-            <button
-              onClick={() => {
-                setToastMessage("");
-                setToastType("");
-              }}
-              className="ml-auto text-gray-400 hover:text-gray-600"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          </div>
+          {row.status || "Completed"}
+        </span>
+      ),
+    },
+    {
+      header: "Action",
+      accessor: "actions",
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setSelectedCollection(row);
+              setShowReceiptModal(true);
+            }}
+            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+            title="View Receipt"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            onClick={() => {
+              setDeleteId(row._id);
+              setShowDeleteModal(true);
+            }}
+            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
+            title="Delete"
+          >
+            <Trash size={16} />
+          </button>
         </div>
-      )}
+      ),
+    },
+  ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading fee collections...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -429,32 +346,16 @@ export default function FeeCollection() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleExportData}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faFileExport} />
-            Export
-          </button>
-          <button
             onClick={fetchAllData}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
           >
-            <FontAwesomeIcon icon={faRefresh} />
-            Refresh
+            <RefreshCw size={18} /> Refresh
           </button>
-          <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200">
-            Total: ₹
-            {collections
-              .filter((c) => c.status === "Completed")
-              .reduce((sum, c) => sum + (c.amount || 0), 0)
-              .toLocaleString()}
-          </div>
           <button
             onClick={() => setShowCollectModal(true)}
-            className={`${theme.primary} text-white px-5 py-2.5 rounded-xl hover:${theme.hover} transition flex items-center gap-2 shadow-sm`}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-500 transition flex items-center gap-2 shadow-sm"
           >
-            <FontAwesomeIcon icon={faPlus} />
-            Collect Fee
+            <Plus size={18} /> Collect Fee
           </button>
         </div>
       </div>
@@ -462,23 +363,20 @@ export default function FeeCollection() {
       {/* API Error */}
       {apiError && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationCircle}
-            className="text-red-500"
-          />
+          <AlertCircle size={18} className="text-red-500" />
           <span>{apiError}</span>
           <button
             onClick={() => setApiError("")}
             className="ml-auto text-red-500 hover:text-red-700"
           >
-            <FontAwesomeIcon icon={faTimes} />
+            <X size={18} />
           </button>
         </div>
       )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">
@@ -492,14 +390,11 @@ export default function FeeCollection() {
               </p>
             </div>
             <div className="p-3 rounded-xl bg-blue-100">
-              <FontAwesomeIcon
-                icon={faWallet}
-                className="text-xl text-blue-600"
-              />
+              <Wallet size={20} className="text-blue-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">This Month</p>
@@ -511,14 +406,11 @@ export default function FeeCollection() {
               </p>
             </div>
             <div className="p-3 rounded-xl bg-green-100">
-              <FontAwesomeIcon
-                icon={faIndianRupeeSign}
-                className="text-xl text-green-600"
-              />
+              <IndianRupee size={20} className="text-green-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">
@@ -532,14 +424,11 @@ export default function FeeCollection() {
               </p>
             </div>
             <div className="p-3 rounded-xl bg-red-100">
-              <FontAwesomeIcon
-                icon={faClock}
-                className="text-xl text-red-600"
-              />
+              <Clock size={20} className="text-red-600" />
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-500">
@@ -551,89 +440,68 @@ export default function FeeCollection() {
               <p className="text-xs text-gray-400 mt-1">Need to pay</p>
             </div>
             <div className="p-3 rounded-xl bg-purple-100">
-              <FontAwesomeIcon
-                icon={faUserGraduate}
-                className="text-xl text-purple-600"
-              />
+              <Users size={20} className="text-purple-600" />
             </div>
           </div>
         </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 relative min-w-[200px]">
-            <FontAwesomeIcon
-              icon={faSearch}
+            <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
             />
             <input
               type="text"
-              placeholder="Search by receipt, student, or course..."
+              placeholder="Search by receipt, student, or fee type..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
             />
           </div>
-          <button
-            onClick={() => setShowFilterModal(true)}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
-          >
-            <FontAwesomeIcon icon={faFilter} />
-            Filter
+          <button className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600">
+            <Filter size={18} /> Filter
           </button>
           <button
-            onClick={handleResetFilters}
+            onClick={() => setSearchTerm("")}
             className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
           >
-            <FontAwesomeIcon icon={faTimes} />
-            Reset
+            <X size={18} /> Clear
           </button>
-          <div className="text-sm text-gray-500">
-            Showing {filteredCollections.length} of {collections.length}{" "}
-            collections
-          </div>
+          <span className="text-sm text-gray-500">
+            Showing {filteredCollections.length} collections
+          </span>
         </div>
       </div>
 
-      {/* Collection Table */}
+      {/* Collections Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="overflow-x-auto">
           <div className="max-h-[500px] overflow-y-auto">
-            {isLoading && collections.length === 0 ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="text-center">
-                  <FontAwesomeIcon
-                    icon={faSpinner}
-                    className="text-4xl text-blue-600 animate-spin mb-3"
-                  />
-                  <p className="text-gray-500">Loading collections...</p>
-                </div>
-              </div>
-            ) : (
-              <Table
-                title="Fee Collection History"
-                columns={columns}
-                data={currentItems}
-                showViewAll={false}
-                theme={theme}
-              />
-            )}
+            <Table
+              title="Fee Collection History"
+              columns={columns}
+              data={currentItems}
+              showViewAll={false}
+              theme={theme}
+            />
           </div>
         </div>
 
         {/* Pagination */}
-        {filteredCollections.length > itemsPerPage && (
+        {totalPages > 1 && (
           <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
             <span className="text-gray-500">
-              Showing {indexOfFirstItem + 1} to{" "}
-              {Math.min(indexOfLastItem, filteredCollections.length)} of{" "}
-              {filteredCollections.length} entries
+              Showing {startIndex + 1} to{" "}
+              {Math.min(startIndex + itemsPerPage, filteredCollections.length)}{" "}
+              of {filteredCollections.length} entries
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => paginate(currentPage - 1)}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -643,7 +511,7 @@ export default function FeeCollection() {
                 (page) => (
                   <button
                     key={page}
-                    onClick={() => paginate(page)}
+                    onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1 rounded-lg transition ${
                       currentPage === page
                         ? "bg-blue-600 text-white"
@@ -655,7 +523,9 @@ export default function FeeCollection() {
                 ),
               )}
               <button
-                onClick={() => paginate(currentPage + 1)}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
                 disabled={currentPage === totalPages}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -668,7 +538,7 @@ export default function FeeCollection() {
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
           <span className="text-gray-500">
             Total: ₹
-            {collections
+            {filteredCollections
               .reduce((sum, c) => sum + (c.amount || 0), 0)
               .toLocaleString()}
           </span>
@@ -677,6 +547,300 @@ export default function FeeCollection() {
           </span>
         </div>
       </div>
+
+      {/* Collect Fee Modal */}
+      {showCollectModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
+              <div>
+                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                  <Plus size={20} className="text-blue-600" />
+                  Collect Fee
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Record a new fee payment
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  resetForm();
+                  setShowCollectModal(false);
+                }}
+                className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              <form
+                onSubmit={handleCollectFee}
+                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Student *
+                  </label>
+                  <select
+                    name="studentId"
+                    required
+                    className={`w-full px-4 py-2.5 border ${errors.studentId ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500`}
+                    value={formData.studentId}
+                    onChange={handleStudentSelect}
+                  >
+                    <option value="">Select Student</option>
+                    {students.map((s) => (
+                      <option key={s._id} value={s._id}>
+                        {s.name} - {s.enrollmentNo} (Pending: ₹
+                        {s.pendingFees?.toLocaleString() || 0})
+                      </option>
+                    ))}
+                  </select>
+                  {errors.studentId && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.studentId}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fee Type *
+                  </label>
+                  <select
+                    name="feeType"
+                    required
+                    className={`w-full px-4 py-2.5 border ${errors.feeType ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500`}
+                    value={formData.feeType}
+                    onChange={handleInputChange}
+                  >
+                    <option value="Tuition">Tuition Fee</option>
+                    <option value="Admission">Admission Fee</option>
+                    <option value="Exam">Exam Fee</option>
+                    <option value="Library">Library Fee</option>
+                    <option value="Other">Other Fee</option>
+                  </select>
+                  {errors.feeType && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.feeType}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Amount (₹) *
+                  </label>
+                  <input
+                    type="number"
+                    name="amount"
+                    required
+                    className={`w-full px-4 py-2.5 border ${errors.amount ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500`}
+                    placeholder="Enter amount"
+                    value={formData.amount}
+                    onChange={handleInputChange}
+                  />
+                  {errors.amount && (
+                    <p className="text-red-500 text-xs mt-1">{errors.amount}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Method *
+                  </label>
+                  <select
+                    name="paymentMethod"
+                    required
+                    className={`w-full px-4 py-2.5 border ${errors.paymentMethod ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-blue-500`}
+                    value={formData.paymentMethod}
+                    onChange={handleInputChange}
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="Online">Online</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                  </select>
+                  {errors.paymentMethod && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.paymentMethod}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    name="date"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+                    value={formData.date}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Note (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    name="note"
+                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+                    placeholder="Add a note..."
+                    value={formData.note}
+                    onChange={handleInputChange}
+                  />
+                </div>
+
+                <div className="md:col-span-2 flex gap-3 pt-4 border-t border-gray-100">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="btn-primary flex-1 disabled:opacity-50 bg-blue-600 hover:bg-blue-700"
+                  >
+                    {isSaving ? "Processing..." : "Collect Fee"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      resetForm();
+                      setShowCollectModal(false);
+                    }}
+                    className="btn-outline flex-1"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
+                <Trash size={32} className="text-red-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                Delete Collection?
+              </h2>
+              <p className="text-gray-500 text-sm mb-6">
+                Are you sure you want to delete this collection? This action
+                cannot be undone.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteId(null);
+                }}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isSaving}
+                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium disabled:opacity-50"
+              >
+                {isSaving ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal */}
+      {showReceiptModal && selectedCollection && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-800">
+                Payment Receipt
+              </h2>
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="text-center border-b border-gray-200 pb-4">
+              <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle size={32} className="text-green-600" />
+              </div>
+              <h3 className="font-bold text-lg">Payment Receipt</h3>
+              <p className="text-sm text-gray-500">
+                #{selectedCollection.receiptNo}
+              </p>
+            </div>
+            <div className="space-y-3 py-4">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Student</span>
+                <span className="font-medium">
+                  {selectedCollection.student?.name || "N/A"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Amount</span>
+                <span className="font-bold text-green-600">
+                  ₹{selectedCollection.amount?.toLocaleString() || 0}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Fee Type</span>
+                <span className="font-medium">
+                  {selectedCollection.feeType}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Method</span>
+                <span className="font-medium">
+                  {selectedCollection.paymentMethod}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Date</span>
+                <span className="font-medium">
+                  {new Date(selectedCollection.date).toLocaleDateString()}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status</span>
+                <span className="text-green-600 font-medium">
+                  {selectedCollection.status || "Completed"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
+              >
+                Close
+              </button>
+              <button className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2">
+                <Printer size={16} /> Print
+              </button>
+              <button className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2">
+                <Download size={16} /> Download
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+};
+
+export default FeeCollection;

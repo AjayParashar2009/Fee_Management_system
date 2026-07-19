@@ -2,59 +2,43 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { Outlet } from "react-router-dom";
 import {
-  faHome,
-  faUsers,
-  faFileInvoice,
-  faReceipt,
-  faChartBar,
-  faArrowRightFromBracket,
-} from "@fortawesome/free-solid-svg-icons";
+  LayoutDashboard,
+  Users,
+  FileText,
+  Receipt,
+  BarChart,
+  LogOut,
+} from "lucide-react";
 import DashboardLayout from "../../Components/Layout/DashboardLayout";
 
-export default function AccountantDashboard() {
+const AccountantDashboard = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // Clear localStorage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
-    // Navigate to login page
     navigate("/login");
   };
 
   const accountantMenu = [
     {
       title: "Dashboard",
-      icon: faHome,
+      icon: LayoutDashboard,
       path: "/accountant-dashboard",
     },
-    {
-      title: "Students",
-      icon: faUsers,
-      path: "/accountant-dashboard/students",
-    },
+    { title: "Students", icon: Users, path: "/accountant-dashboard/students" },
     {
       title: "Fee Collection",
-      icon: faFileInvoice,
+      icon: FileText,
       path: "/accountant-dashboard/fee-collection",
     },
     {
       title: "Fee Receipts",
-      icon: faReceipt,
+      icon: Receipt,
       path: "/accountant-dashboard/receipts",
     },
-    {
-      title: "Reports",
-      icon: faChartBar,
-      path: "/accountant-dashboard/reports",
-    },
-    {
-      title: "Logout",
-      icon: faArrowRightFromBracket,
-      path: "#",
-      onClick: handleLogout,
-    },
+    { title: "Reports", icon: BarChart, path: "/accountant-dashboard/reports" },
+    { title: "Logout", icon: LogOut, path: "#", onClick: handleLogout },
   ];
 
   const accountantTheme = {
@@ -74,4 +58,6 @@ export default function AccountantDashboard() {
       <Outlet />
     </DashboardLayout>
   );
-}
+};
+
+export default AccountantDashboard;

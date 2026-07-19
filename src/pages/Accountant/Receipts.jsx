@@ -1,38 +1,25 @@
+// src/pages/Accountant/Receipts.jsx
 import React, { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faSearch,
-  faDownload,
-  faEye,
-  faPrint,
-  faFilePdf,
-  faReceipt,
-  faFilter,
-  faShare,
-  faTimes,
-  faCheckCircle,
-  faClock,
-  faCreditCard,
-  faCalendarAlt,
-  faEnvelope,
-  faCopy,
-  faFileExport,
-  faMoneyBillWave,
-  faUserGraduate,
-  faIndianRupeeSign,
-  faQrcode,
-  faSpinner,
-  faExclamationCircle,
-  faInfoCircle,
-  faRefresh,
-  faTrash,
-  faEdit,
-} from "@fortawesome/free-solid-svg-icons";
-import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
+  Search,
+  Filter,
+  Download,
+  Eye,
+  Printer,
+  FileText,
+  Share,
+  X,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  CreditCard,
+  Users,
+} from "lucide-react";
 import Table from "../../Components/Table/Tables";
-import { receiptService } from "../../services/receiptService";
+import { receiptAPI } from "../../api";
+import toast from "react-hot-toast";
 
-export default function Receipts() {
+const Receipts = () => {
   const theme = {
     primary: "bg-blue-600",
     hover: "hover:bg-blue-500",
@@ -40,186 +27,190 @@ export default function Receipts() {
     text: "text-blue-600",
   };
 
+  const [receipts, setReceipts] = useState([]);
+  const [filteredReceipts, setFilteredReceipts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState("all");
-  const [showShareModal, setShowShareModal] = useState(false);
-  const [showFilterModal, setShowFilterModal] = useState(false);
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedMethod, setSelectedMethod] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
-  const [receipts, setReceipts] = useState([]);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState("date");
-  const [sortDirection, setSortDirection] = useState("desc");
 
   useEffect(() => {
     fetchReceipts();
   }, []);
 
-  // Show toast notification
-  const showToast = (message, type = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage("");
-      setToastType("");
-    }, 3000);
-  };
+  useEffect(() => {
+    filterReceipts();
+  }, [searchTerm, receipts]);
 
-  // ✅ Fetch Receipts using receiptService
   const fetchReceipts = async () => {
     try {
-      setIsLoading(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setApiError("Please login first");
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await receiptService.getAll();
-
-      console.log("Receipts Response:", response.data);
-
+      setLoading(true);
+      const response = await receiptAPI.getAll();
       if (response.data.success) {
-        setReceipts(response.data.data || []);
+        const data = response.data.data || [];
+        setReceipts(data);
+        setFilteredReceipts(data);
       }
     } catch (error) {
       console.error("Error fetching receipts:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to fetch receipts");
-        showToast(
-          error.response.data.message || "Failed to fetch receipts",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      toast.error("Failed to load receipts");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // ✅ Handle Download Receipt using receiptService
-  const handleDownloadReceipt = async (receipt) => {
-    try {
-      setIsLoading(true);
+  const filterReceipts = () => {
+    if (!searchTerm.trim()) {
+      setFilteredReceipts(receipts);
+      return;
+    }
+    const term = searchTerm.toLowerCase();
+    const filtered = receipts.filter(
+      (r) =>
+        r.receiptNo?.toLowerCase().includes(term) ||
+        r.feeType?.toLowerCase().includes(term) ||
+        r.paymentMethod?.toLowerCase().includes(term) ||
+        r.student?.name?.toLowerCase().includes(term),
+    );
+    setFilteredReceipts(filtered);
+  };
 
+  const handleDownload = async (receipt) => {
+    try {
       if (receipt.pdfUrl) {
-        window.open(
-          `${import.meta.env.VITE_BASE_URL}${receipt.pdfUrl}`,
-          "_blank",
-        );
-        showToast(
-          `Receipt ${receipt.receiptNo} downloaded successfully!`,
-          "success",
-        );
+        window.open(receipt.pdfUrl, "_blank");
+        toast.success(`Receipt ${receipt.receiptNo} downloaded!`);
         return;
       }
-
-      const response = await receiptService.generatePDF(receipt._id);
-
+      const response = await receiptAPI.generatePDF(receipt._id);
       if (response.data.success) {
-        const downloadUrl =
-          response.data.data.downloadUrl ||
-          `${import.meta.env.VITE_BASE_URL}/receipts/${receipt._id}/download-pdf`;
+        const downloadUrl = response.data.data.downloadUrl;
         window.open(downloadUrl, "_blank");
-        await fetchReceipts();
-        showToast(
-          `Receipt ${receipt.receiptNo} downloaded successfully!`,
-          "success",
-        );
+        toast.success(`Receipt ${receipt.receiptNo} downloaded!`);
       }
     } catch (error) {
       console.error("Download error:", error);
-      showToast("Failed to download receipt", "error");
-    } finally {
-      setIsLoading(false);
+      toast.error("Failed to download receipt");
     }
   };
 
-  // ✅ Handle Download All using receiptService
   const handleDownloadAll = async () => {
     try {
-      setIsLoading(true);
-      showToast("Preparing all receipts for download...", "info");
-
+      toast.loading("Preparing all receipts...");
       for (const receipt of receipts) {
         if (!receipt.pdfUrl) {
-          try {
-            await receiptService.generatePDF(receipt._id);
-          } catch (err) {
-            console.error(
-              "Error generating PDF for receipt:",
-              receipt.receiptNo,
-            );
-          }
+          await receiptAPI.generatePDF(receipt._id);
         }
       }
-
-      await fetchReceipts();
-      showToast("All receipts downloaded successfully!", "success");
+      toast.dismiss();
+      toast.success("All receipts downloaded successfully!");
     } catch (error) {
-      console.error("Download all error:", error);
-      showToast("Failed to download all receipts", "error");
-    } finally {
-      setIsLoading(false);
+      toast.dismiss();
+      toast.error("Failed to download all receipts");
     }
   };
-  return (
-    <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
-            toastType === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : toastType === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-blue-50 border border-blue-200 text-blue-700"
+
+  const columns = [
+    {
+      header: "Receipt No.",
+      accessor: "receiptNo",
+      render: (row) => (
+        <span className="font-mono font-semibold">{row.receiptNo}</span>
+      ),
+    },
+    {
+      header: "Student",
+      accessor: "student",
+      render: (row) => row.student?.name || "N/A",
+    },
+    {
+      header: "Date",
+      accessor: "date",
+      render: (row) => new Date(row.date).toLocaleDateString(),
+    },
+    {
+      header: "Amount",
+      accessor: "amount",
+      render: (row) => (
+        <span className="font-semibold text-blue-600">
+          ₹{row.amount?.toLocaleString() || 0}
+        </span>
+      ),
+    },
+    { header: "Fee Type", accessor: "feeType" },
+    { header: "Method", accessor: "paymentMethod" },
+    {
+      header: "Status",
+      accessor: "status",
+      render: (row) => (
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            row.status === "Generated"
+              ? "bg-green-100 text-green-700"
+              : "bg-yellow-100 text-yellow-700"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <FontAwesomeIcon
-              icon={
-                toastType === "success"
-                  ? faCheckCircle
-                  : toastType === "error"
-                    ? faExclamationCircle
-                    : faInfoCircle
-              }
-              className={
-                toastType === "success"
-                  ? "text-green-500"
-                  : toastType === "error"
-                    ? "text-red-500"
-                    : "text-blue-500"
-              }
-            />
-            <p className="text-sm font-medium">{toastMessage}</p>
-            <button
-              onClick={() => {
-                setToastMessage("");
-                setToastType("");
-              }}
-              className="ml-auto text-gray-400 hover:text-gray-600"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          </div>
+          {row.status}
+        </span>
+      ),
+    },
+    {
+      header: "Action",
+      accessor: "actions",
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setSelectedReceipt(row);
+              setShowReceiptModal(true);
+            }}
+            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+          >
+            <Eye size={16} />
+          </button>
+          <button
+            onClick={() => handleDownload(row)}
+            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
+          >
+            <Download size={16} />
+          </button>
+          <button className="p-1.5 text-gray-600 hover:bg-gray-50 rounded-lg transition">
+            <Printer size={16} />
+          </button>
+          <button className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition">
+            <Share size={16} />
+          </button>
         </div>
-      )}
+      ),
+    },
+  ];
 
+  // Pagination
+  const totalPages = Math.ceil(filteredReceipts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = filteredReceipts.slice(
+    startIndex,
+    startIndex + itemsPerPage,
+  );
+
+  // Stats
+  const totalAmount = receipts.reduce((sum, r) => sum + (r.amount || 0), 0);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading receipts...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -233,89 +224,47 @@ export default function Receipts() {
             onClick={fetchReceipts}
             className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
           >
-            <FontAwesomeIcon icon={faRefresh} />
-            Refresh
+            <RefreshCw size={18} /> Refresh
           </button>
-          <select
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
-          >
-            <option value="all">All Time</option>
-            <option value="today">Today</option>
-            <option value="week">This Week</option>
-            <option value="month">This Month</option>
-            <option value="year">This Year</option>
-          </select>
           <button
             onClick={handleDownloadAll}
             className="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition flex items-center gap-2 shadow-sm"
           >
-            <FontAwesomeIcon icon={faFilePdf} />
-            Export All
+            <FileText size={18} /> Export All
           </button>
-          <button
-            onClick={handlePrintAll}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faPrint} />
-            Print
+          <button className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2">
+            <Printer size={18} /> Print
           </button>
         </div>
       </div>
-
-      {/* API Error */}
-      {apiError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationCircle}
-            className="text-red-500"
-          />
-          <span>{apiError}</span>
-          <button
-            onClick={() => setApiError("")}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
-        </div>
-      )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {summaryCards.map((card, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 hover:shadow-md transition"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">
-                  {card.title}
-                </p>
-                <h3 className="text-2xl font-bold text-gray-800 mt-2">
-                  {card.value}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
-              </div>
-              <div className={`p-3 rounded-xl ${card.bg}`}>
-                <FontAwesomeIcon
-                  icon={card.icon}
-                  className={`text-xl ${card.color}`}
-                />
-              </div>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-sm text-gray-500">Total Receipts</p>
+          <p className="text-2xl font-bold text-gray-800">{receipts.length}</p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-sm text-gray-500">Total Amount</p>
+          <p className="text-2xl font-bold text-green-600">
+            ₹{totalAmount.toLocaleString()}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <p className="text-sm text-gray-500">Generated</p>
+          <p className="text-2xl font-bold text-green-600">
+            {receipts.filter((r) => r.status === "Generated").length}
+          </p>
+        </div>
       </div>
 
-      {/* Search and Filters */}
+      {/* Search */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 relative min-w-[200px]">
-            <FontAwesomeIcon
-              icon={faSearch}
+            <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
             />
             <input
               type="text"
@@ -325,23 +274,18 @@ export default function Receipts() {
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
             />
           </div>
-          <button
-            onClick={() => setShowFilterModal(true)}
-            className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
-          >
-            <FontAwesomeIcon icon={faFilter} />
-            Advanced Filter
+          <button className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600">
+            <Filter size={18} /> Filter
           </button>
           <button
-            onClick={handleResetFilters}
+            onClick={() => setSearchTerm("")}
             className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
           >
-            <FontAwesomeIcon icon={faTimes} />
-            Reset
+            <X size={18} /> Clear
           </button>
-          <div className="text-sm text-gray-500">
-            Showing {filteredReceipts.length} of {receipts.length} receipts
-          </div>
+          <span className="text-sm text-gray-500">
+            Showing {filteredReceipts.length} receipts
+          </span>
         </div>
       </div>
 
@@ -359,17 +303,16 @@ export default function Receipts() {
           </div>
         </div>
 
-        {/* Pagination */}
-        {filteredReceipts.length > itemsPerPage && (
+        {totalPages > 1 && (
           <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
             <span className="text-gray-500">
-              Showing {indexOfFirstItem + 1} to{" "}
-              {Math.min(indexOfLastItem, filteredReceipts.length)} of{" "}
+              Showing {startIndex + 1} to{" "}
+              {Math.min(startIndex + itemsPerPage, filteredReceipts.length)} of{" "}
               {filteredReceipts.length} entries
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => paginate(currentPage - 1)}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -379,19 +322,17 @@ export default function Receipts() {
                 (page) => (
                   <button
                     key={page}
-                    onClick={() => paginate(page)}
-                    className={`px-3 py-1 rounded-lg transition ${
-                      currentPage === page
-                        ? "bg-blue-600 text-white"
-                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
-                    }`}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-1 rounded-lg transition ${currentPage === page ? "bg-blue-600 text-white" : "border border-gray-200 hover:bg-gray-50 text-gray-600"}`}
                   >
                     {page}
                   </button>
                 ),
               )}
               <button
-                onClick={() => paginate(currentPage + 1)}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
                 disabled={currentPage === totalPages}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -404,7 +345,7 @@ export default function Receipts() {
         <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
           <span className="text-gray-500">
             Total: ₹
-            {receipts
+            {filteredReceipts
               .reduce((sum, r) => sum + (r.amount || 0), 0)
               .toLocaleString()}
           </span>
@@ -414,7 +355,7 @@ export default function Receipts() {
         </div>
       </div>
 
-      {/* Receipt Detail Modal */}
+      {/* Receipt Modal */}
       {showReceiptModal && selectedReceipt && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -426,28 +367,18 @@ export default function Receipts() {
                 onClick={() => setShowReceiptModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+                <X size={20} />
               </button>
             </div>
-
             <div className="text-center border-b border-gray-200 pb-4">
               <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-3xl text-green-600"
-                />
+                <CheckCircle size={32} className="text-green-600" />
               </div>
               <h3 className="font-bold text-lg">Payment Receipt</h3>
               <p className="text-sm text-gray-500">
                 #{selectedReceipt.receiptNo}
               </p>
-              {selectedReceipt.feeCollection?.transactionId && (
-                <p className="text-xs text-gray-400 mt-1">
-                  Transaction: {selectedReceipt.feeCollection.transactionId}
-                </p>
-              )}
             </div>
-
             <div className="space-y-3 py-4">
               <div className="flex justify-between">
                 <span className="text-gray-500">Student</span>
@@ -456,9 +387,9 @@ export default function Receipts() {
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Course</span>
-                <span className="font-medium">
-                  {selectedReceipt.student?.course || "N/A"}
+                <span className="text-gray-500">Amount</span>
+                <span className="font-bold text-green-600">
+                  ₹{selectedReceipt.amount?.toLocaleString() || 0}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -466,13 +397,7 @@ export default function Receipts() {
                 <span className="font-medium">{selectedReceipt.feeType}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Amount</span>
-                <span className="font-bold text-green-600">
-                  ₹{selectedReceipt.amount?.toLocaleString() || 0}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500">Payment Method</span>
+                <span className="text-gray-500">Method</span>
                 <span className="font-medium">
                   {selectedReceipt.paymentMethod}
                 </span>
@@ -480,9 +405,7 @@ export default function Receipts() {
               <div className="flex justify-between">
                 <span className="text-gray-500">Date</span>
                 <span className="font-medium">
-                  {selectedReceipt.date
-                    ? new Date(selectedReceipt.date).toLocaleDateString("en-IN")
-                    : "N/A"}
+                  {new Date(selectedReceipt.date).toLocaleDateString()}
                 </span>
               </div>
               <div className="flex justify-between">
@@ -492,213 +415,21 @@ export default function Receipts() {
                 </span>
               </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-3 pt-4 border-t border-gray-200">
               <button
                 onClick={() => setShowReceiptModal(false)}
                 className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
               >
                 Close
               </button>
-              <button
-                onClick={() => handlePrintReceipt(selectedReceipt)}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
-              >
-                <FontAwesomeIcon icon={faPrint} />
-                Print
+              <button className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2">
+                <Printer size={16} /> Print
               </button>
               <button
-                onClick={() => handleDownloadReceipt(selectedReceipt)}
+                onClick={() => handleDownload(selectedReceipt)}
                 className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition font-medium flex items-center justify-center gap-2"
               >
-                <FontAwesomeIcon icon={faDownload} />
-                Download
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Modal */}
-      {showShareModal && selectedReceipt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Share Receipt</h2>
-              <button
-                onClick={() => setShowShareModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-
-            <p className="text-sm text-gray-500 mb-4">
-              Share receipt #{selectedReceipt.receiptNo} with the student
-            </p>
-
-            <div className="space-y-3">
-              {/* Email */}
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:border-purple-300 transition cursor-pointer">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                  <FontAwesomeIcon
-                    icon={faEnvelope}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">Email</p>
-                  <p className="text-xs text-gray-500">
-                    {selectedReceipt.student?.email || "No email"}
-                  </p>
-                </div>
-                <button
-                  onClick={handleSendEmail}
-                  className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition"
-                >
-                  Send
-                </button>
-              </div>
-
-              {/* WhatsApp */}
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:border-green-300 transition cursor-pointer">
-                <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <FontAwesomeIcon
-                    icon={faWhatsapp}
-                    className="text-green-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">WhatsApp</p>
-                  <p className="text-xs text-gray-500">
-                    {selectedReceipt.student?.phone || "No phone"}
-                  </p>
-                </div>
-                <button
-                  onClick={handleSendWhatsApp}
-                  className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700 transition"
-                >
-                  Send
-                </button>
-              </div>
-
-              {/* Copy Link */}
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:border-blue-300 transition cursor-pointer">
-                <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <FontAwesomeIcon icon={faCopy} className="text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-800">Copy Link</p>
-                  <p className="text-xs text-gray-500">Shareable link</p>
-                </div>
-                <button
-                  onClick={handleCopyLink}
-                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
-                >
-                  Copy
-                </button>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowShareModal(false)}
-              className="w-full mt-4 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Filter Modal */}
-      {showFilterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Advanced Filters
-              </h2>
-              <button
-                onClick={() => setShowFilterModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Status
-                </label>
-                <select
-                  value={selectedStatus}
-                  onChange={(e) => setSelectedStatus(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="all">All Status</option>
-                  <option value="Generated">Generated</option>
-                  <option value="Pending">Pending</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Payment Method
-                </label>
-                <select
-                  value={selectedMethod}
-                  onChange={(e) => setSelectedMethod(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                >
-                  <option value="all">All Methods</option>
-                  <option value="UPI">UPI</option>
-                  <option value="Credit Card">Credit Card</option>
-                  <option value="Debit Card">Debit Card</option>
-                  <option value="Net Banking">Net Banking</option>
-                  <option value="Cash">Cash</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Date Range
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-xs text-gray-500">From</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500">To</label>
-                    <input
-                      type="date"
-                      value={endDate}
-                      onChange={(e) => setEndDate(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3 mt-6">
-              <button
-                onClick={handleResetFilters}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                Reset
-              </button>
-              <button
-                onClick={handleApplyFilters}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium"
-              >
-                Apply Filters
+                <Download size={16} /> Download
               </button>
             </div>
           </div>
@@ -706,4 +437,6 @@ export default function Receipts() {
       )}
     </div>
   );
-}
+};
+
+export default Receipts;

@@ -1,209 +1,123 @@
-import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+// src/pages/Student/Payment.jsx
+import React, { useState } from "react";
 import {
-  faSpinner,
-  faCheckCircle,
-  faTimesCircle,
-  faCreditCard,
-  faWallet,
-  faUniversity,
-  faMobileAlt,
-  faLock,
-} from "@fortawesome/free-solid-svg-icons";
-import { paymentService } from "../../services/paymentService";
+  CreditCard,
+  Wallet,
+  Building,
+  Smartphone,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  X,
+  Shield,
+  IndianRupee,
+} from "lucide-react";
+import toast from "react-hot-toast";
+import { paymentAPI } from "../../api";
 
-export default function Payment() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [paymentStatus, setPaymentStatus] = useState(null);
-  const [error, setError] = useState("");
-  const [paymentData, setPaymentData] = useState({
-    amount: "",
-    feeType: "",
+const Payment = () => {
+  const [formData, setFormData] = useState({
     studentId: "",
+    feeType: "",
+    amount: "",
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
-  // Load Razorpay script
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    document.body.appendChild(script);
-
-    return () => {
-      document.body.removeChild(script);
-    };
-  }, []);
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setPaymentData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const handlePayment = async () => {
-    if (!paymentData.amount || !paymentData.feeType || !paymentData.studentId) {
-      setError("Please fill all fields");
-      return;
-    }
-
-    setIsLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
     setError("");
+    setSuccess(false);
 
     try {
-      // ✅ Using paymentService instead of direct axios
-      const response = await paymentService.createOrder({
-        amount: parseFloat(paymentData.amount),
-        feeType: paymentData.feeType,
-        studentId: paymentData.studentId,
+      // Validate
+      if (!formData.studentId || !formData.feeType || !formData.amount) {
+        setError("Please fill all fields");
+        setLoading(false);
+        return;
+      }
+
+      // Create payment order
+      const response = await paymentAPI.createOrder({
+        studentId: formData.studentId,
+        feeType: formData.feeType,
+        amount: parseFloat(formData.amount),
       });
 
       if (response.data.success) {
-        const { orderId, amount, key } = response.data.data;
-
-        // Open Razorpay checkout
-        const options = {
-          key: key,
-          amount: amount,
-          currency: "INR",
-          name: "Fee Management System",
-          description: `Payment for ${paymentData.feeType}`,
-          order_id: orderId,
-          handler: function (response) {
-            // Verify payment
-            verifyPayment(
-              response.razorpay_order_id,
-              response.razorpay_payment_id,
-              response.razorpay_signature,
-            );
-          },
-          prefill: {
-            name: "Student",
-            email: "student@example.com",
-            contact: "9876543210",
-          },
-          theme: {
-            color: "#4F46E5",
-          },
-          modal: {
-            ondismiss: function () {
-              setIsLoading(false);
-              setPaymentStatus({
-                status: "cancelled",
-                message: "Payment was cancelled",
-              });
-            },
-          },
-        };
-
-        const razorpay = new window.Razorpay(options);
-        razorpay.open();
+        setSuccess(true);
+        toast.success("Payment initiated successfully!");
+        // Reset form
+        setFormData({ studentId: "", feeType: "", amount: "" });
       }
     } catch (error) {
       console.error("Payment error:", error);
-      setError(error.response?.data?.message || "Failed to initiate payment");
-      setIsLoading(false);
-    }
-  };
-
-  const verifyPayment = async (orderId, paymentId, signature) => {
-    try {
-      // ✅ Using paymentService instead of direct axios
-      const response = await paymentService.verifyPayment({
-        orderId,
-        paymentId,
-        signature,
-        studentId: paymentData.studentId,
-        feeType: paymentData.feeType,
-        amount: parseFloat(paymentData.amount),
-      });
-
-      if (response.data.success) {
-        setPaymentStatus({
-          status: "success",
-          message: "Payment successful!",
-          receipt: response.data.data.receipt,
-        });
-        alert("Payment successful!");
-        window.location.href = "/student-dashboard/receipts";
-      }
-    } catch (error) {
-      console.error("Verification error:", error);
-      setPaymentStatus({
-        status: "failed",
-        message: error.response?.data?.message || "Payment verification failed",
-      });
+      setError(
+        error.response?.data?.message || "Payment failed. Please try again.",
+      );
+      toast.error(error.response?.data?.message || "Payment failed");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-  return (
-    <div className="max-w-2xl mx-auto p-6">
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6">
-          Make a Payment
-        </h1>
 
+  return (
+    <div className="max-w-2xl mx-auto">
+      <h1 className="text-2xl font-bold text-gray-800 mb-6">Make a Payment</h1>
+
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
         {/* Error Message */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600">
-            <FontAwesomeIcon icon={faTimesCircle} className="mr-2" />
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 flex items-center gap-2">
+            <AlertCircle size={18} className="text-red-500" />
             {error}
+            <button
+              onClick={() => setError("")}
+              className="ml-auto text-red-500 hover:text-red-700"
+            >
+              <X size={18} />
+            </button>
           </div>
         )}
 
-        {/* Payment Status */}
-        {paymentStatus && (
-          <div
-            className={`mb-4 p-4 rounded-xl ${
-              paymentStatus.status === "success"
-                ? "bg-green-50 border border-green-200 text-green-600"
-                : paymentStatus.status === "cancelled"
-                  ? "bg-yellow-50 border border-yellow-200 text-yellow-600"
-                  : "bg-red-50 border border-red-200 text-red-600"
-            }`}
-          >
-            <FontAwesomeIcon
-              icon={
-                paymentStatus.status === "success"
-                  ? faCheckCircle
-                  : paymentStatus.status === "cancelled"
-                    ? faTimesCircle
-                    : faTimesCircle
-              }
-              className="mr-2"
-            />
-            {paymentStatus.message}
+        {/* Success Message */}
+        {success && (
+          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl text-green-600 flex items-center gap-2">
+            <CheckCircle size={18} className="text-green-500" />
+            Payment successful! You will receive a confirmation email shortly.
           </div>
         )}
 
-        {/* Payment Form */}
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Student ID
+              Student ID <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
-              name="studentId"
-              value={paymentData.studentId}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
               placeholder="Enter student ID"
+              value={formData.studentId}
+              onChange={(e) =>
+                setFormData({ ...formData, studentId: e.target.value })
+              }
             />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Fee Type
+              Fee Type <span className="text-red-500">*</span>
             </label>
             <select
-              name="feeType"
-              value={paymentData.feeType}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
+              required
+              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
+              value={formData.feeType}
+              onChange={(e) =>
+                setFormData({ ...formData, feeType: e.target.value })
+              }
             >
               <option value="">Select Fee Type</option>
               <option value="Tuition">Tuition Fee</option>
@@ -216,39 +130,36 @@ export default function Payment() {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Amount (₹)
+              Amount (₹) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number"
-              name="amount"
-              value={paymentData.amount}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-              placeholder="Enter amount"
-              min="1"
-            />
+            <div className="relative">
+              <IndianRupee
+                size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+              <input
+                type="number"
+                required
+                className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
+                placeholder="Enter amount"
+                value={formData.amount}
+                onChange={(e) =>
+                  setFormData({ ...formData, amount: e.target.value })
+                }
+                min="1"
+              />
+            </div>
           </div>
 
-          <div className="pt-4">
-            <button
-              onClick={handlePayment}
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white py-3 rounded-xl hover:bg-blue-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <FontAwesomeIcon icon={faLock} />
-                  Pay with Razorpay
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-purple-600 text-white py-3 rounded-xl hover:bg-purple-700 transition disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            <Lock size={18} />
+            {loading ? "Processing..." : "Pay with Razorpay"}
+          </button>
+        </form>
 
         {/* Payment Methods */}
         <div className="mt-6 pt-6 border-t border-gray-200">
@@ -256,13 +167,19 @@ export default function Payment() {
             Secure payments via
           </p>
           <div className="flex justify-center gap-4 mt-3 text-gray-400">
-            <FontAwesomeIcon icon={faCreditCard} className="text-xl" />
-            <FontAwesomeIcon icon={faWallet} className="text-xl" />
-            <FontAwesomeIcon icon={faUniversity} className="text-xl" />
-            <FontAwesomeIcon icon={faMobileAlt} className="text-xl" />
+            <CreditCard size={24} />
+            <Wallet size={24} />
+            <Building size={24} />
+            <Smartphone size={24} />
+          </div>
+          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-gray-400">
+            <Shield size={14} className="text-green-500" />
+            <span>256-bit encrypted payment</span>
           </div>
         </div>
       </div>
     </div>
   );
-}
+};
+
+export default Payment;

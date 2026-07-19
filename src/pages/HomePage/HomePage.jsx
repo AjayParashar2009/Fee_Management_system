@@ -1,22 +1,10 @@
 import React from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faShieldHalved,
-  faUser,
-  faCheckCircle,
-  faEnvelope,
-  faPhone,
-  faLocationDot,
-} from "@fortawesome/free-solid-svg-icons";
+import { useNavigate } from "react-router-dom";
+import { Shield, User, CheckCircle, Mail, Phone, MapPin } from "lucide-react";
 
-export default function App() {
+const HomePage = () => {
   const navigate = useNavigate();
   const menu = ["Home", "Features", "About", "How It Works", "Contact"];
-
-  const handleLoginClick = () => {
-    navigate("/login");
-  };
 
   return (
     <div className="min-h-screen">
@@ -24,14 +12,13 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex items-center justify-between h-20 px-8">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-green-600 flex items-center justify-center text-white text-lg">
-              <FontAwesomeIcon icon={faShieldHalved} />
+              <Shield size={24} />
             </div>
             <div>
               <h1 className="font-bold text-lg">Fee Management</h1>
               <p className="text-gray-500 text-sm">System</p>
             </div>
           </div>
-
           <ul className="flex gap-10 font-semibold">
             {menu.map((item) => (
               <li
@@ -42,82 +29,57 @@ export default function App() {
               </li>
             ))}
           </ul>
-
-          <div className="flex gap-4">
-            <button
-              onClick={handleLoginClick}
-              className="border border-green-600 text-green-600 px-6 py-2 rounded-xl hover:bg-green-50 transition"
-            >
-              <FontAwesomeIcon icon={faUser} className="mr-2" />
-              Login
-            </button>
-          </div>
+          <button
+            onClick={() => navigate("/login")}
+            className="border border-green-600 text-green-600 px-6 py-2 rounded-xl hover:bg-green-50 transition"
+          >
+            <User size={16} className="inline mr-2" />
+            Login
+          </button>
         </div>
       </nav>
 
-      <section className="bg-linear-to-r from-green-50 via-white to-blue-50 pt-32 pb-24">
+      <section className="bg-gradient-to-r from-green-50 via-white to-blue-50 pt-32 pb-24">
         <div className="max-w-7xl mx-auto px-8 grid lg:grid-cols-2 gap-16 items-center">
           <div>
             <h1 className="text-6xl font-extrabold leading-tight">
               Smart Fee Management
               <br />
-              Made
-              <span className="text-green-600"> Simple</span>
+              Made <span className="text-green-600">Simple</span>
             </h1>
-
             <p className="text-gray-600 mt-8 text-lg leading-8">
               Manage students, collect fees, generate receipts, and track
               everything from one powerful platform.
             </p>
-
             <div className="grid grid-cols-2 gap-5 mt-10">
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
-                Student Management
+                <CheckCircle className="text-green-500" size={18} /> Student
+                Management
               </div>
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
-                Reports & Analytics
+                <CheckCircle className="text-green-500" size={18} /> Reports &
+                Analytics
               </div>
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
-                Fee Collection
+                <CheckCircle className="text-green-500" size={18} /> Fee
+                Collection
               </div>
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
+                <CheckCircle className="text-green-500" size={18} />{" "}
                 Notifications
               </div>
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
-                Receipt Generation
+                <CheckCircle className="text-green-500" size={18} /> Receipt
+                Generation
               </div>
               <div className="flex items-center gap-3">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-green-500"
-                />
-                Secure & Reliable
+                <CheckCircle className="text-green-500" size={18} /> Secure &
+                Reliable
               </div>
             </div>
-
             <div className="flex gap-5 mt-12">
               <button
-                onClick={handleLoginClick}
+                onClick={() => navigate("/login")}
                 className="bg-green-600 text-white px-8 py-4 rounded-xl hover:bg-green-700 transition"
               >
                 Login →
@@ -127,7 +89,6 @@ export default function App() {
               </button>
             </div>
           </div>
-
           <div>
             <img
               src="/Dashboard.png"
@@ -138,7 +99,6 @@ export default function App() {
         </div>
       </section>
 
-      {/* Features Section */}
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-8">
           <div className="text-center mb-16">
@@ -152,10 +112,7 @@ export default function App() {
           <div className="grid md:grid-cols-3 gap-8">
             <div className="p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition">
               <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center mb-4">
-                <FontAwesomeIcon
-                  icon={faUser}
-                  className="text-2xl text-green-600"
-                />
+                <User className="text-2xl text-green-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">
                 Easy Management
@@ -167,10 +124,7 @@ export default function App() {
             </div>
             <div className="p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition">
               <div className="w-14 h-14 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
-                <FontAwesomeIcon
-                  icon={faCheckCircle}
-                  className="text-2xl text-blue-600"
-                />
+                <CheckCircle className="text-2xl text-blue-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">
                 Secure Payments
@@ -181,10 +135,7 @@ export default function App() {
             </div>
             <div className="p-6 bg-gray-50 rounded-2xl hover:shadow-lg transition">
               <div className="w-14 h-14 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
-                <FontAwesomeIcon
-                  icon={faEnvelope}
-                  className="text-2xl text-purple-600"
-                />
+                <Mail className="text-2xl text-purple-600" />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">
                 Instant Notifications
@@ -202,7 +153,7 @@ export default function App() {
           <div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-600 rounded-xl flex items-center justify-center">
-                <FontAwesomeIcon icon={faShieldHalved} />
+                <Shield size={20} />
               </div>
               <div>
                 <h2 className="font-bold">Fee Management</h2>
@@ -214,7 +165,6 @@ export default function App() {
               and reports efficiently.
             </p>
           </div>
-
           <div>
             <h2 className="font-bold text-lg mb-5">Quick Links</h2>
             <ul className="space-y-3 text-gray-400">
@@ -232,7 +182,6 @@ export default function App() {
               </li>
             </ul>
           </div>
-
           <div>
             <h2 className="font-bold text-lg mb-5">Support</h2>
             <ul className="space-y-3 text-gray-400">
@@ -250,30 +199,27 @@ export default function App() {
               </li>
             </ul>
           </div>
-
           <div>
             <h2 className="font-bold text-lg mb-5">Contact</h2>
             <div className="space-y-4 text-gray-400">
               <p>
-                <FontAwesomeIcon icon={faPhone} className="mr-3" />
-                +91 9876543210
+                <Phone size={16} className="inline mr-3" /> +91 9876543210
               </p>
               <p>
-                <FontAwesomeIcon icon={faEnvelope} className="mr-3" />
-                support@feesystem.com
+                <Mail size={16} className="inline mr-3" /> support@feesystem.com
               </p>
               <p>
-                <FontAwesomeIcon icon={faLocationDot} className="mr-3" />
-                New Delhi, India
+                <MapPin size={16} className="inline mr-3" /> New Delhi, India
               </p>
             </div>
           </div>
         </div>
-
         <div className="border-t border-gray-700 py-6 text-center text-gray-400">
           © 2026 Fee Management System. All Rights Reserved.
         </div>
       </footer>
     </div>
   );
-}
+};
+
+export default HomePage;

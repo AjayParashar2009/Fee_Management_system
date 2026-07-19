@@ -1,5 +1,11 @@
+// src/App.jsx
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+} from "react-router-dom";
 import ProtectedRoute from "./Components/ProtectedRoute";
 
 // Public Pages
@@ -37,6 +43,13 @@ function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<Login />} />
+
+        {/* ✅ Add dashboard redirect */}
+        <Route
+          path="/dashboard"
+          element={<Navigate to="/admin-dashboard" replace />}
+        />
+
         {/* Admin Routes - Login + Admin role required */}
         <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
           <Route path="/admin-dashboard" element={<AdminDashboard />}>

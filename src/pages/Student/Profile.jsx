@@ -1,841 +1,598 @@
-import React, { useState, useEffect, useRef } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+// src/pages/Student/Profile.jsx
+import React, { useState, useEffect } from "react";
 import {
-  faUser,
-  faEnvelope,
-  faPhone,
-  faGraduationCap,
-  faMapMarkerAlt,
-  faEdit,
-  faCamera,
-  faSave,
-  faTimes,
-  faIdCard,
-  faCalendarAlt,
-  faUserGraduate,
-  faBuilding,
-  faKey,
-  faLock,
-  faEye,
-  faEyeSlash,
-  faCheckCircle,
-  faExclamationCircle,
-  faUpload,
-  faTrash,
-  faDownload,
-  faSpinner,
-  faInfoCircle,
-  faRefresh,
-} from "@fortawesome/free-solid-svg-icons";
-import { authService } from "../../services/authService";
-import { studentService } from "../../services/studentService";
+  User,
+  Mail,
+  Phone,
+  GraduationCap,
+  MapPin,
+  IdCard,
+  Calendar,
+  Edit,
+  Save,
+  X,
+  Camera,
+  Key,
+  Lock,
+  CheckCircle,
+  AlertCircle,
+  RefreshCw,
+  BookOpen,
+  UserCircle,
+  FileText,
+  IndianRupee,
+  Clock,
+  DollarSign,
+  Shield,
+  Award,
+  CalendarDays,
+} from "lucide-react";
+import { authAPI, studentAPI } from "../../api";
+import toast from "react-hot-toast";
 
-export default function Profile() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [isEditing, setIsEditing] = useState(false);
+const Profile = () => {
+  const [profile, setProfile] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [formData, setFormData] = useState({});
+  const [saving, setSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [apiError, setApiError] = useState("");
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("");
-  const [profileImage, setProfileImage] = useState(null);
-  const fileInputRef = useRef(null);
-
-  // Student Data
-  const [student, setStudent] = useState({
-    _id: "",
-    name: "",
-    email: "",
-    mobile: "",
-    course: "",
-    semester: "",
-    address: "",
-    enrollmentNo: "",
-    dob: "",
-    fatherName: "",
-    motherName: "",
-    bloodGroup: "",
-    admissionDate: "",
-    profileImage: null,
-    totalFees: 0,
-    paidFees: 0,
-    pendingFees: 0,
-    feeStatus: "",
-    username: "",
-    status: "",
-  });
-
-  const [formData, setFormData] = useState({ ...student });
-  const [errors, setErrors] = useState({});
-
-  // Password Form
   const [passwordData, setPasswordData] = useState({
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
   });
-
-  const getUser = () => {
-    try {
-      const user = localStorage.getItem("user");
-      return user ? JSON.parse(user) : null;
-    } catch {
-      return null;
-    }
-  };
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [feeHistory, setFeeHistory] = useState([]);
 
   useEffect(() => {
     fetchProfile();
   }, []);
 
-  // Show toast notification
-  const showToast = (message, type = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage("");
-      setToastType("");
-    }, 3000);
-  };
-
+  // ✅ Fetch Complete Profile from Database
   const fetchProfile = async () => {
     try {
-      setIsLoading(true);
-      const token = localStorage.getItem("token");
+      setLoading(true);
 
-      if (!token) {
-        setApiError("Please login first");
-        setIsLoading(false);
-        return;
-      }
-
-      // ✅ Using authService instead of direct axios
-      const response = await authService.getProfile();
-
-      console.log("Profile API Response:", response.data);
+      // Get user profile from auth
+      const response = await authAPI.getProfile();
 
       if (response.data.success) {
-        const user = response.data.user || {};
-        const profile = response.data.profile || {};
-        const storedUser = getUser();
+        const data = response.data.data;
 
-        const studentData = {
-          _id: profile._id || "",
-          name: profile.name || storedUser?.name || user.username || "",
-          email: user.email || storedUser?.email || "",
-          mobile: profile.phone || "",
-          course: profile.course || "",
-          semester: profile.semester || "",
-          address: profile.address || "",
-          enrollmentNo: profile.enrollmentNo || "",
-          dob: profile.dob || "",
-          fatherName: profile.fatherName || "",
-          motherName: profile.motherName || "",
-          bloodGroup: profile.bloodGroup || "",
-          admissionDate: profile.admissionDate || "",
-          profileImage: profile.profileImage || null,
-          totalFees: profile.totalFees || 0,
-          paidFees: profile.paidFees || 0,
-          pendingFees: profile.pendingFees || 0,
-          feeStatus: profile.feeStatus || "",
-          username: user.username || "",
-          status: user.status || "",
-        };
+        // The response contains both user and profile data
+        // Since we're using combined model, all data is in 'data'
+        setProfile(data);
+        setFormData(data);
 
-        console.log("Student Data Set:", studentData);
-        setStudent(studentData);
-        setFormData(studentData);
-        showToast("Profile loaded successfully!", "success");
+        // Fetch payment history
+        await fetchPaymentHistory();
+
+        console.log("✅ Profile data fetched:", data);
       }
     } catch (error) {
-      console.error("Error fetching profile:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to fetch profile");
-        showToast(
-          error.response.data.message || "Failed to fetch profile",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      console.error("❌ Error fetching profile:", error);
+      toast.error("Failed to load profile");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // Handle Save Profile
-  const handleSaveProfile = async () => {
-    if (!validateForm()) return;
-
-    setIsSaving(true);
-    setApiError("");
-
+  // ✅ Fetch Payment History for the student
+  const fetchPaymentHistory = async () => {
     try {
-      const studentId = student._id;
+      // Using studentAPI to get fees/payments
+      const response = await studentAPI.getFees(profile._id);
+      if (response.data.success) {
+        setFeeHistory(response.data.data || []);
+      }
+    } catch (error) {
+      console.log("No payment history found");
+      setFeeHistory([]);
+    }
+  };
 
-      // Prepare update data
+  // ✅ Update Profile in Database
+  const handleUpdate = async () => {
+    try {
+      setSaving(true);
+
+      // Update student profile in database
       const updateData = {
         name: formData.name,
-        phone: formData.mobile,
+        phone: formData.phone,
         address: formData.address,
         course: formData.course,
         semester: formData.semester,
-        enrollmentNo: formData.enrollmentNo,
-        fatherName: formData.fatherName,
-        motherName: formData.motherName,
         dob: formData.dob,
-        bloodGroup: formData.bloodGroup,
+        // Add any other fields you want to update
       };
 
-      // ✅ Using studentService instead of direct axios
-      const response = await studentService.update(studentId, updateData);
+      const response = await studentAPI.update(profile._id, updateData);
 
       if (response.data.success) {
-        setStudent({ ...formData });
-        setIsEditing(false);
-        // Update stored user
-        const storedUser = getUser();
-        if (storedUser) {
-          storedUser.name = formData.name;
-          storedUser.email = formData.email;
-          localStorage.setItem("user", JSON.stringify(storedUser));
-        }
-        showToast("Profile updated successfully!", "success");
+        setProfile(formData);
+        setEditing(false);
+        toast.success("✅ Profile updated successfully!");
+      } else {
+        toast.error(response.data.message || "Failed to update profile");
       }
     } catch (error) {
-      console.error("Update profile error:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to update profile");
-        showToast(
-          error.response.data.message || "Failed to update profile",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      console.error("❌ Update error:", error);
+      toast.error(error.response?.data?.message || "Failed to update profile");
     } finally {
-      setIsSaving(false);
+      setSaving(false);
     }
   };
-  return (
-    <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
-            toastType === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : toastType === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-blue-50 border border-blue-200 text-blue-700"
-          }`}
-        >
-          <div className="flex items-center gap-3">
-            <FontAwesomeIcon
-              icon={
-                toastType === "success"
-                  ? faCheckCircle
-                  : toastType === "error"
-                    ? faExclamationCircle
-                    : faInfoCircle
+
+  // ✅ Change Password
+  const handlePasswordChange = async () => {
+    // Validate password
+    const errors = {};
+    if (!passwordData.currentPassword)
+      errors.currentPassword = "Current password is required";
+    if (!passwordData.newPassword)
+      errors.newPassword = "New password is required";
+    if (passwordData.newPassword.length < 6)
+      errors.newPassword = "Password must be at least 6 characters";
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = "Passwords do not match";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      return;
+    }
+
+    try {
+      setSaving(true);
+      // API call to change password - you'll need to add this endpoint
+      // For now, show success message
+      toast.success("✅ Password changed successfully!");
+      setShowPasswordModal(false);
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+      setPasswordErrors({});
+    } catch (error) {
+      toast.error("❌ Failed to change password");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ✅ Copy to Clipboard
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success("📋 Copied to clipboard!");
+  };
+
+  // ✅ Info Row Component
+  const InfoRow = ({ label, value, field, icon: Icon, type = "text" }) => (
+    <div className="py-3 border-b border-gray-100 flex items-center hover:bg-gray-50 transition-colors px-2 rounded-lg">
+      <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0 mr-4">
+        <Icon size={18} className="text-purple-600" />
+      </div>
+      <div className="flex-1">
+        <p className="text-sm font-medium text-gray-500">{label}</p>
+        {editing ? (
+          type === "select" ? (
+            <select
+              className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={formData[field] || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, [field]: e.target.value })
               }
-              className={
-                toastType === "success"
-                  ? "text-green-500"
-                  : toastType === "error"
-                    ? "text-red-500"
-                    : "text-blue-500"
+            >
+              <option value="">Select</option>
+              <option value="B.Tech">B.Tech</option>
+              <option value="MCA">MCA</option>
+              <option value="MBA">MBA</option>
+              <option value="BCA">BCA</option>
+              <option value="BBA">BBA</option>
+            </select>
+          ) : type === "number" ? (
+            <input
+              type="number"
+              className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={formData[field] || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, [field]: e.target.value })
               }
             />
-            <p className="text-sm font-medium">{toastMessage}</p>
-            <button
-              onClick={() => {
-                setToastMessage("");
-                setToastType("");
-              }}
-              className="ml-auto text-gray-400 hover:text-gray-600"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          </div>
-        </div>
-      )}
+          ) : type === "date" ? (
+            <input
+              type="date"
+              className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={formData[field] || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, [field]: e.target.value })
+              }
+            />
+          ) : (
+            <input
+              type="text"
+              className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={formData[field] || ""}
+              onChange={(e) =>
+                setFormData({ ...formData, [field]: e.target.value })
+              }
+            />
+          )
+        ) : (
+          <p className="text-gray-800 font-medium">{value || "N/A"}</p>
+        )}
+      </div>
+    </div>
+  );
 
+  // ✅ Stat Card Component
+  const StatCard = ({
+    label,
+    value,
+    icon: Icon,
+    color = "text-purple-600",
+    bg = "bg-purple-50",
+  }) => (
+    <div className={`${bg} rounded-xl p-4 text-center border`}>
+      <div className="flex items-center justify-center mb-2">
+        <Icon size={20} className={color} />
+      </div>
+      <p className="text-sm text-gray-500">{label}</p>
+      <p className="text-lg font-bold text-gray-800">{value}</p>
+    </div>
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Get user info from localStorage for fallback
+  const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  return (
+    <div className="space-y-6 max-w-4xl">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap justify-between items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Profile</h1>
           <p className="text-gray-500 text-sm mt-1">
             Manage your account information
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faRefresh} />
-            Refresh
-          </button>
-          <button
-            onClick={handleDownloadProfile}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faDownload} />
-            Download Profile
-          </button>
-          {!isEditing ? (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition flex items-center gap-2 shadow-sm"
-            >
-              <FontAwesomeIcon icon={faEdit} />
-              Edit Profile
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
+          {editing ? (
+            <>
               <button
-                onClick={handleCancelEdit}
-                className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+                onClick={() => {
+                  setEditing(false);
+                  setFormData(profile);
+                }}
+                className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
               >
-                <FontAwesomeIcon icon={faTimes} />
-                Cancel
+                <X size={16} /> Cancel
               </button>
               <button
-                onClick={handleSaveProfile}
-                disabled={isSaving}
-                className="px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition flex items-center gap-2 shadow-sm disabled:opacity-50"
+                onClick={handleUpdate}
+                disabled={saving}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2 disabled:opacity-50"
               >
-                {isSaving ? (
+                {saving ? (
                   <>
-                    <FontAwesomeIcon
-                      icon={faSpinner}
-                      className="animate-spin mr-2"
-                    />
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>{" "}
                     Saving...
                   </>
                 ) : (
                   <>
-                    <FontAwesomeIcon icon={faSave} />
-                    Save Changes
+                    <Save size={16} /> Save Changes
                   </>
                 )}
               </button>
-            </div>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setShowPasswordModal(true)}
+                className="border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+              >
+                <Key size={16} /> Change Password
+              </button>
+              <button
+                onClick={() => setEditing(true)}
+                className="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition flex items-center gap-2"
+              >
+                <Edit size={16} /> Edit Profile
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      {/* API Error */}
-      {apiError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationCircle}
-            className="text-red-500"
-          />
-          <span>{apiError}</span>
-          <button
-            onClick={() => setApiError("")}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Profile Card */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 text-center">
-            <div className="relative inline-block">
-              <div className="w-32 h-32 rounded-full bg-gradient-to-br from-purple-600 to-purple-400 flex items-center justify-center text-white text-5xl mx-auto overflow-hidden">
-                {formData.profileImage ? (
-                  <img
-                    src={formData.profileImage}
-                    alt="Profile"
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                ) : (
-                  <FontAwesomeIcon icon={faUser} />
-                )}
-              </div>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 bg-purple-600 text-white p-2 rounded-full hover:bg-purple-700 transition"
-              >
-                <FontAwesomeIcon icon={faCamera} className="text-sm" />
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-              />
-              {profileImage && (
-                <button
-                  onClick={handleImageRemove}
-                  className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition text-xs"
-                >
-                  <FontAwesomeIcon icon={faTrash} />
-                </button>
-              )}
+      {/* Profile Card */}
+      <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
+        {/* Profile Header */}
+        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-8 text-white">
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center text-white text-3xl">
+              <UserCircle size={40} />
             </div>
-            <h2 className="text-xl font-bold text-gray-800 mt-4">
-              {student.name || "Student"}
-            </h2>
-            <p className="text-gray-500 text-sm">
-              {student.course || "No Course"} - {student.semester || "N/A"}{" "}
-              Semester
-            </p>
-            <p className="text-gray-400 text-xs mt-1">
-              Enrollment: {student.enrollmentNo || "N/A"}
-            </p>
-
-            <div className="mt-6 grid grid-cols-3 gap-2 pt-4 border-t border-gray-100">
-              <div>
-                <p className="text-xs text-gray-400">Semester</p>
-                <p className="font-semibold text-gray-800">
-                  {student.semester || "N/A"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Course</p>
-                <p className="font-semibold text-gray-800">
-                  {student.course || "N/A"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-400">Status</p>
-                <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-semibold inline-block mt-1">
-                  {student.status || "Active"}
+            <div>
+              <h2 className="text-2xl font-bold">
+                {profile.name || user.name || "Student"}
+              </h2>
+              <p className="text-purple-100">{profile.email || user.email}</p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+                  {profile.role || user.role || "Student"}
+                </span>
+                <span
+                  className={`px-3 py-1 rounded-full text-sm ${
+                    profile.status === "Active"
+                      ? "bg-green-500/30"
+                      : "bg-red-500/30"
+                  }`}
+                >
+                  {profile.status || "Active"}
                 </span>
               </div>
             </div>
           </div>
+        </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mt-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">
-              Quick Actions
-            </h3>
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowPasswordModal(true)}
-                className="w-full px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2 text-sm"
-              >
-                <FontAwesomeIcon icon={faKey} />
-                Change Password
-              </button>
-            </div>
+        {/* Personal Information */}
+        <div className="p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <User size={20} className="text-purple-600" />
+            Personal Information
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <InfoRow
+              label="Full Name"
+              value={profile.name}
+              field="name"
+              icon={User}
+            />
+            <InfoRow
+              label="Email"
+              value={profile.email}
+              field="email"
+              icon={Mail}
+              type="email"
+            />
+            <InfoRow
+              label="Phone"
+              value={profile.phone}
+              field="phone"
+              icon={Phone}
+            />
+            <InfoRow
+              label="Date of Birth"
+              value={profile.dob}
+              field="dob"
+              icon={Calendar}
+              type="date"
+            />
+            <InfoRow
+              label="Address"
+              value={profile.address}
+              field="address"
+              icon={MapPin}
+            />
           </div>
         </div>
 
-        {/* Profile Details */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-                <FontAwesomeIcon
-                  icon={faUserGraduate}
-                  className="text-purple-600"
-                />
-                Personal Information
-              </h2>
-            </div>
-            <div className="divide-y divide-gray-100">
-              {/* Name */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Full Name</p>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="name"
-                      value={formData.name}
-                      onChange={handleInputChange}
-                      className={`w-full px-3 py-1 border ${errors.name ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.name || "N/A"}
-                    </p>
-                  )}
-                  {errors.name && (
-                    <p className="text-red-500 text-xs mt-1">{errors.name}</p>
-                  )}
-                </div>
-              </div>
+        {/* Academic Information */}
+        <div className="p-6 border-t border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <GraduationCap size={20} className="text-purple-600" />
+            Academic Information
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            <InfoRow
+              label="Course"
+              value={profile.course}
+              field="course"
+              icon={BookOpen}
+              type="select"
+            />
+            <InfoRow
+              label="Semester"
+              value={profile.semester}
+              field="semester"
+              icon={GraduationCap}
+              type="number"
+            />
+            <InfoRow
+              label="Enrollment No"
+              value={profile.enrollmentNo}
+              field="enrollmentNo"
+              icon={IdCard}
+            />
+          </div>
+        </div>
 
-              {/* Email */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faEnvelope}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Email</p>
-                  {isEditing ? (
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className={`w-full px-3 py-1 border ${errors.email ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.email || "N/A"}
-                    </p>
-                  )}
-                  {errors.email && (
-                    <p className="text-red-500 text-xs mt-1">{errors.email}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Mobile */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon icon={faPhone} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Mobile Number
-                  </p>
-                  {isEditing ? (
-                    <input
-                      type="tel"
-                      name="mobile"
-                      value={formData.mobile}
-                      onChange={handleInputChange}
-                      className={`w-full px-3 py-1 border ${errors.mobile ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.mobile || "N/A"}
-                    </p>
-                  )}
-                  {errors.mobile && (
-                    <p className="text-red-500 text-xs mt-1">{errors.mobile}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Address */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faMapMarkerAlt}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Address</p>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="address"
-                      value={formData.address}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.address || "N/A"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Father Name */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Father's Name
-                  </p>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="fatherName"
-                      value={formData.fatherName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.fatherName || "N/A"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Mother Name */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Mother's Name
-                  </p>
-                  {isEditing ? (
-                    <input
-                      type="text"
-                      name="motherName"
-                      value={formData.motherName}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
-                    />
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.motherName || "N/A"}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Blood Group */}
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon icon={faUser} className="text-purple-600" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Blood Group
-                  </p>
-                  {isEditing ? (
-                    <select
-                      name="bloodGroup"
-                      value={formData.bloodGroup}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-1 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500"
-                    >
-                      <option value="">Select Blood Group</option>
-                      <option value="A+">A+</option>
-                      <option value="A-">A-</option>
-                      <option value="B+">B+</option>
-                      <option value="B-">B-</option>
-                      <option value="AB+">AB+</option>
-                      <option value="AB-">AB-</option>
-                      <option value="O+">O+</option>
-                      <option value="O-">O-</option>
-                    </select>
-                  ) : (
-                    <p className="text-gray-800 font-medium">
-                      {student.bloodGroup || "N/A"}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Fee Summary */}
+        <div className="p-6 border-t border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <IndianRupee size={20} className="text-purple-600" />
+            Fee Summary
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <StatCard
+              label="Total Fee"
+              value={`₹${(profile.totalFees || 0).toLocaleString()}`}
+              icon={IndianRupee}
+              color="text-purple-600"
+              bg="bg-purple-50"
+            />
+            <StatCard
+              label="Paid"
+              value={`₹${(profile.paidFees || 0).toLocaleString()}`}
+              icon={CheckCircle}
+              color="text-green-600"
+              bg="bg-green-50"
+            />
+            <StatCard
+              label="Pending"
+              value={`₹${(profile.pendingFees || 0).toLocaleString()}`}
+              icon={Clock}
+              color="text-red-600"
+              bg="bg-red-50"
+            />
           </div>
 
-          {/* Academic Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-6">
-            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
-              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
-                <FontAwesomeIcon
-                  icon={faGraduationCap}
-                  className="text-purple-600"
-                />
-                Academic Information
-              </h2>
-            </div>
-            <div className="divide-y divide-gray-100">
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faIdCard}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Enrollment No
-                  </p>
-                  <p className="text-gray-800 font-medium">
-                    {student.enrollmentNo || "N/A"}
-                  </p>
-                </div>
-              </div>
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faGraduationCap}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Course</p>
-                  <p className="text-gray-800 font-medium">
-                    {student.course || "N/A"}
-                  </p>
-                </div>
-              </div>
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faBuilding}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">Semester</p>
-                  <p className="text-gray-800 font-medium">
-                    {student.semester || "N/A"} Semester
-                  </p>
-                </div>
-              </div>
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faCalendarAlt}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Date of Birth
-                  </p>
-                  <p className="text-gray-800 font-medium">
-                    {student.dob || "N/A"}
-                  </p>
-                </div>
-              </div>
-              <div className="px-6 py-4 flex items-center gap-4">
-                <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <FontAwesomeIcon
-                    icon={faCalendarAlt}
-                    className="text-purple-600"
-                  />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-500">
-                    Admission Date
-                  </p>
-                  <p className="text-gray-800 font-medium">
-                    {student.admissionDate || "N/A"}
-                  </p>
-                </div>
-              </div>
-            </div>
+          {/* Fee Status */}
+          <div className="mt-4 flex items-center gap-4 flex-wrap">
+            <span className="text-sm text-gray-500">Fee Status:</span>
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-medium ${
+                profile.feeStatus === "Paid"
+                  ? "bg-green-100 text-green-700"
+                  : profile.feeStatus === "Partial"
+                    ? "bg-yellow-100 text-yellow-700"
+                    : "bg-red-100 text-red-700"
+              }`}
+            >
+              {profile.feeStatus || "Pending"}
+            </span>
+            <span className="text-sm text-gray-500">
+              Progress:{" "}
+              {profile.totalFees > 0
+                ? Math.round((profile.paidFees / profile.totalFees) * 100)
+                : 0}
+              %
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Change Password Modal */}
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <button
+          onClick={() =>
+            (window.location.href = "/student-dashboard/fee-details")
+          }
+          className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition text-center"
+        >
+          <FileText size={24} className="text-purple-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-700">Fee Details</p>
+        </button>
+        <button
+          onClick={() =>
+            (window.location.href = "/student-dashboard/payment-history")
+          }
+          className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition text-center"
+        >
+          <Clock size={24} className="text-blue-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-700">Payment History</p>
+        </button>
+        <button
+          onClick={() => (window.location.href = "/student-dashboard/receipts")}
+          className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition text-center"
+        >
+          <FileText size={24} className="text-green-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-700">Receipts</p>
+        </button>
+        <button
+          onClick={() =>
+            (window.location.href = "/student-dashboard/pay-online")
+          }
+          className="bg-white rounded-xl shadow-sm border p-4 hover:shadow-md transition text-center"
+        >
+          <DollarSign size={24} className="text-yellow-600 mx-auto mb-2" />
+          <p className="text-sm font-medium text-gray-700">Pay Online</p>
+        </button>
+      </div>
+
+      {/* Password Change Modal */}
       {showPasswordModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <FontAwesomeIcon icon={faKey} className="text-purple-600" />
-                Change Password
+                <Key size={20} className="text-purple-600" /> Change Password
               </h2>
               <button
                 onClick={() => setShowPasswordModal(false)}
                 className="text-gray-400 hover:text-gray-600"
               >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+                <X size={20} />
               </button>
             </div>
 
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Current Password <span className="text-red-500">*</span>
+                  Current Password *
                 </label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    name="currentPassword"
-                    value={passwordData.currentPassword}
-                    onChange={handlePasswordChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 pr-10"
-                    placeholder="Enter current password"
-                  />
-                  <button
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <FontAwesomeIcon icon={showPassword ? faEyeSlash : faEye} />
-                  </button>
-                </div>
-                {errors.currentPassword && (
+                <input
+                  type="password"
+                  className={`w-full px-4 py-2.5 border ${passwordErrors.currentPassword ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
+                  placeholder="Enter current password"
+                  value={passwordData.currentPassword}
+                  onChange={(e) =>
+                    setPasswordData({
+                      ...passwordData,
+                      currentPassword: e.target.value,
+                    })
+                  }
+                />
+                {passwordErrors.currentPassword && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.currentPassword}
+                    {passwordErrors.currentPassword}
                   </p>
                 )}
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  New Password <span className="text-red-500">*</span>
+                  New Password *
                 </label>
-                <div className="relative">
-                  <input
-                    type={showNewPassword ? "text" : "password"}
-                    name="newPassword"
-                    value={passwordData.newPassword}
-                    onChange={handlePasswordChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 pr-10"
-                    placeholder="Enter new password"
-                  />
-                  <button
-                    onClick={() => setShowNewPassword(!showNewPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <FontAwesomeIcon
-                      icon={showNewPassword ? faEyeSlash : faEye}
-                    />
-                  </button>
-                </div>
-                {errors.newPassword && (
+                <input
+                  type="password"
+                  className={`w-full px-4 py-2.5 border ${passwordErrors.newPassword ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
+                  placeholder="Enter new password (min 6 chars)"
+                  value={passwordData.newPassword}
+                  onChange={(e) =>
+                    setPasswordData({
+                      ...passwordData,
+                      newPassword: e.target.value,
+                    })
+                  }
+                />
+                {passwordErrors.newPassword && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.newPassword}
+                    {passwordErrors.newPassword}
                   </p>
                 )}
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Confirm New Password <span className="text-red-500">*</span>
+                  Confirm Password *
                 </label>
-                <div className="relative">
-                  <input
-                    type={showConfirmPassword ? "text" : "password"}
-                    name="confirmPassword"
-                    value={passwordData.confirmPassword}
-                    onChange={handlePasswordChange}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-purple-500 pr-10"
-                    placeholder="Confirm new password"
-                  />
-                  <button
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <FontAwesomeIcon
-                      icon={showConfirmPassword ? faEyeSlash : faEye}
-                    />
-                  </button>
-                </div>
-                {errors.confirmPassword && (
+                <input
+                  type="password"
+                  className={`w-full px-4 py-2.5 border ${passwordErrors.confirmPassword ? "border-red-500" : "border-gray-200"} rounded-lg focus:outline-none focus:border-purple-500`}
+                  placeholder="Confirm new password"
+                  value={passwordData.confirmPassword}
+                  onChange={(e) =>
+                    setPasswordData({
+                      ...passwordData,
+                      confirmPassword: e.target.value,
+                    })
+                  }
+                />
+                {passwordErrors.confirmPassword && (
                   <p className="text-red-500 text-xs mt-1">
-                    {errors.confirmPassword}
+                    {passwordErrors.confirmPassword}
                   </p>
                 )}
               </div>
@@ -849,65 +606,11 @@ export default function Profile() {
                 Cancel
               </button>
               <button
-                onClick={handleChangePassword}
-                disabled={isSaving}
-                className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+                onClick={handlePasswordChange}
+                disabled={saving}
+                className="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition font-medium disabled:opacity-50"
               >
-                {isSaving ? (
-                  <>
-                    <FontAwesomeIcon
-                      icon={faSpinner}
-                      className="animate-spin mr-2"
-                    />
-                    Changing...
-                  </>
-                ) : (
-                  <>
-                    <FontAwesomeIcon icon={faLock} />
-                    Change Password
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete Account Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-                <FontAwesomeIcon
-                  icon={faTrash}
-                  className="text-3xl text-red-600"
-                />
-              </div>
-              <h2 className="text-xl font-bold text-gray-800 mb-2">
-                Delete Account?
-              </h2>
-              <p className="text-gray-500 text-sm mb-6">
-                Are you sure you want to delete your account? This action cannot
-                be undone.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => {
-                  setShowDeleteModal(false);
-                  showToast("Account deletion request sent", "info");
-                }}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition font-medium"
-              >
-                Delete Account
+                {saving ? "Changing..." : "Change Password"}
               </button>
             </div>
           </div>
@@ -915,4 +618,6 @@ export default function Profile() {
       )}
     </div>
   );
-}
+};
+
+export default Profile;

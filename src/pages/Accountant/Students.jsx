@@ -1,34 +1,28 @@
+// src/pages/Accountant/Students.jsx
 import React, { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faSearch,
-  faFilter,
-  faEye,
-  faFileInvoice,
-  faUserCheck,
-  faUserTimes,
-  faUserGraduate,
-  faTimes,
-  faHistory,
-  faReceipt,
-  faIndianRupeeSign,
-  faCalendarAlt,
-  faPhone,
-  faEnvelope,
-  faGraduationCap,
-  faMapMarkerAlt,
-  faSpinner,
-  faExclamationCircle,
-  faInfoCircle,
-  faCheckCircle,
-  faRefresh,
-  faFileExport,
-  faPrint,
-} from "@fortawesome/free-solid-svg-icons";
+import { studentAPI } from "../../api";
 import Table from "../../Components/Table/Tables";
-import { studentService } from "../../services/studentService";
+import {
+  Search,
+  Filter,
+  Eye,
+  GraduationCap,
+  UserCheck,
+  UserX,
+  X,
+  AlertCircle,
+  RefreshCw,
+  User,
+  Phone,
+  Mail,
+  BookOpen,
+  MapPin,
+  IdCard,
+  Calendar,
+} from "lucide-react";
+import toast from "react-hot-toast";
 
-export default function Students() {
+const Students = () => {
   const theme = {
     primary: "bg-blue-600",
     hover: "hover:bg-blue-500",
@@ -36,163 +30,168 @@ export default function Students() {
     text: "text-blue-600",
   };
 
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showStudentModal, setShowStudentModal] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
   const [students, setStudents] = useState([]);
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("");
+  const [filteredStudents, setFilteredStudents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState("name");
-  const [sortDirection, setSortDirection] = useState("asc");
+  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
 
   useEffect(() => {
     fetchStudents();
   }, []);
 
-  // Show toast notification
-  const showToast = (message, type = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage("");
-      setToastType("");
-    }, 3000);
-  };
+  useEffect(() => {
+    filterStudents();
+  }, [searchTerm, students]);
 
-  // ✅ Fetch Students using studentService
   const fetchStudents = async () => {
     try {
-      setIsLoading(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setApiError("Please login first");
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await studentService.getAll();
-
-      console.log("Students Response:", response.data);
-
+      setLoading(true);
+      const response = await studentAPI.getAll();
       if (response.data.success) {
-        setStudents(response.data.data || []);
-        showToast("Students loaded successfully!", "success");
+        const data = response.data.data || [];
+        setStudents(data);
+        setFilteredStudents(data);
+        setStats({
+          total: data.length,
+          active: data.filter((s) => s.status === "Active").length,
+          inactive: data.filter((s) => s.status === "Inactive").length,
+        });
       }
     } catch (error) {
       console.error("Error fetching students:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to fetch students");
-        showToast(
-          error.response.data.message || "Failed to fetch students",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      toast.error("Failed to load students");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
-            toastType === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : toastType === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-blue-50 border border-blue-200 text-blue-700"
+  const filterStudents = () => {
+    if (!searchTerm.trim()) {
+      setFilteredStudents(students);
+      return;
+    }
+    const term = searchTerm.toLowerCase();
+    const filtered = students.filter(
+      (s) =>
+        s.name?.toLowerCase().includes(term) ||
+        s.email?.toLowerCase().includes(term) ||
+        s.enrollmentNo?.toLowerCase().includes(term) ||
+        s.course?.toLowerCase().includes(term),
+    );
+    setFilteredStudents(filtered);
+  };
+
+  const openViewModal = (student) => {
+    setSelectedStudent(student);
+    setShowViewModal(true);
+  };
+
+  const columns = [
+    { header: "Enrollment", accessor: "enrollmentNo" },
+    { header: "Name", accessor: "name" },
+    { header: "Email", accessor: "email" },
+    { header: "Course", accessor: "course" },
+    { header: "Semester", accessor: "semester" },
+    { header: "Phone", accessor: "phone" },
+    {
+      header: "Status",
+      accessor: "status",
+      render: (row) => (
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            row.status === "Active"
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <FontAwesomeIcon
-              icon={
-                toastType === "success"
-                  ? faCheckCircle
-                  : toastType === "error"
-                    ? faExclamationCircle
-                    : faInfoCircle
-              }
-              className={
-                toastType === "success"
-                  ? "text-green-500"
-                  : toastType === "error"
-                    ? "text-red-500"
-                    : "text-blue-500"
-              }
-            />
-            <p className="text-sm font-medium">{toastMessage}</p>
-            <button
-              onClick={() => {
-                setToastMessage("");
-                setToastType("");
-              }}
-              className="ml-auto text-gray-400 hover:text-gray-600"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          </div>
-        </div>
-      )}
+          {row.status}
+        </span>
+      ),
+    },
+    {
+      header: "Action",
+      accessor: "actions",
+      render: (row) => (
+        <button
+          onClick={() => openViewModal(row)}
+          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+          title="View Student"
+        >
+          <Eye size={16} />
+        </button>
+      ),
+    },
+  ];
 
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Students</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage student fee records
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={handleRefresh}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faRefresh} />
-            Refresh
-          </button>
-          <button
-            onClick={handleExport}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faFileExport} />
-            Export
-          </button>
-          <div className="text-sm text-gray-500 bg-white px-4 py-2 rounded-xl border border-gray-200">
-            Showing {filteredStudents.length} of {students.length} students
-          </div>
+  // Pagination
+  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const currentItems = filteredStudents.slice(
+    startIndex,
+    startIndex + itemsPerPage,
+  );
+
+  const statsCards = [
+    {
+      title: "Total Students",
+      value: stats.total,
+      subtitle: "All registered students",
+      icon: GraduationCap,
+      color: "text-blue-600",
+      bg: "bg-blue-100",
+    },
+    {
+      title: "Active Students",
+      value: stats.active,
+      subtitle: "Currently enrolled",
+      icon: UserCheck,
+      color: "text-green-600",
+      bg: "bg-green-100",
+    },
+    {
+      title: "Inactive Students",
+      value: stats.inactive,
+      subtitle: "Not currently enrolled",
+      icon: UserX,
+      color: "text-red-600",
+      bg: "bg-red-100",
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading students...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* API Error */}
-      {apiError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationCircle}
-            className="text-red-500"
-          />
-          <span>{apiError}</span>
-          <button
-            onClick={() => setApiError("")}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-800">Students</h1>
+          <p className="text-gray-500 text-sm mt-1">View student fee records</p>
         </div>
-      )}
+        <button
+          onClick={fetchStudents}
+          className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+        >
+          <RefreshCw size={18} /> Refresh
+        </button>
+      </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {statsCards.map((card, index) => (
           <div
             key={index}
@@ -209,23 +208,20 @@ export default function Students() {
                 <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
               </div>
               <div className={`p-3 rounded-xl ${card.bg}`}>
-                <FontAwesomeIcon
-                  icon={card.icon}
-                  className={`text-xl ${card.color}`}
-                />
+                <card.icon size={20} className={card.color} />
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Filters */}
+      {/* Search */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-wrap items-center gap-4">
           <div className="flex-1 relative min-w-[200px]">
-            <FontAwesomeIcon
-              icon={faSearch}
+            <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
             />
             <input
               type="text"
@@ -235,29 +231,18 @@ export default function Students() {
               className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Status:</label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
-            >
-              <option value="all">All Students</option>
-              <option value="Paid">Fee Paid</option>
-              <option value="Partial">Partial Paid</option>
-              <option value="Pending">Fee Pending</option>
-            </select>
-          </div>
+          <button className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600">
+            <Filter size={18} /> Filter
+          </button>
           <button
-            onClick={() => {
-              setSearchTerm("");
-              setSelectedStatus("all");
-            }}
+            onClick={() => setSearchTerm("")}
             className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
           >
-            <FontAwesomeIcon icon={faTimes} />
-            Reset
+            <X size={18} /> Clear
           </button>
+          <span className="text-sm text-gray-500">
+            Showing {filteredStudents.length} students
+          </span>
         </div>
       </div>
 
@@ -276,16 +261,16 @@ export default function Students() {
         </div>
 
         {/* Pagination */}
-        {filteredStudents.length > itemsPerPage && (
+        {totalPages > 1 && (
           <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
             <span className="text-gray-500">
-              Showing {indexOfFirstItem + 1} to{" "}
-              {Math.min(indexOfLastItem, filteredStudents.length)} of{" "}
-              {filteredStudents.length} students
+              Showing {startIndex + 1} to{" "}
+              {Math.min(startIndex + itemsPerPage, filteredStudents.length)} of{" "}
+              {filteredStudents.length} entries
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => paginate(currentPage - 1)}
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -295,7 +280,7 @@ export default function Students() {
                 (page) => (
                   <button
                     key={page}
-                    onClick={() => paginate(page)}
+                    onClick={() => setCurrentPage(page)}
                     className={`px-3 py-1 rounded-lg transition ${
                       currentPage === page
                         ? "bg-blue-600 text-white"
@@ -307,7 +292,9 @@ export default function Students() {
                 ),
               )}
               <button
-                onClick={() => paginate(currentPage + 1)}
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
                 disabled={currentPage === totalPages}
                 className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -317,107 +304,111 @@ export default function Students() {
           </div>
         )}
 
-        <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
-          <span className="text-gray-500">
-            Total Students: {filteredStudents.length}
-          </span>
-          <span className="text-gray-500">
-            Total Collection: ₹
-            {students
-              .reduce((sum, s) => sum + (s.paidFees || 0), 0)
-              .toLocaleString()}
-          </span>
+        <div className="px-6 py-3 border-t border-gray-100 text-sm text-gray-500">
+          Showing {filteredStudents.length} of {students.length} entries
         </div>
       </div>
 
       {/* View Student Modal */}
-      {showStudentModal && selectedStudent && (
+      {showViewModal && selectedStudent && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <FontAwesomeIcon
-                    icon={faUserGraduate}
-                    className="text-blue-600"
-                  />
+                  <User size={20} className="text-blue-600" />
                   Student Details
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  #{selectedStudent._id?.slice(-6) || "N/A"} •{" "}
-                  {selectedStudent.name}
+                  #{selectedStudent.enrollmentNo} • {selectedStudent.name}
                 </p>
               </div>
               <button
-                onClick={() => setShowStudentModal(false)}
+                onClick={() => {
+                  setShowViewModal(false);
+                  setSelectedStudent(null);
+                }}
                 className="text-gray-400 hover:text-gray-600 p-2 hover:bg-gray-100 rounded-lg transition"
               >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
+                <X size={20} />
               </button>
             </div>
 
             <div className="p-6">
-              {/* Student Info */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs text-gray-500">Student ID</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent._id?.slice(-6) || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Name</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.name}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Email</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.email || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Phone</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.phone}
-                    </p>
-                  </div>
+                <div>
+                  <p className="text-xs text-gray-500">Student ID</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent._id?.slice(-6) || "N/A"}
+                  </p>
                 </div>
-                <div className="space-y-2">
-                  <div>
-                    <p className="text-xs text-gray-500">Course</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.course}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Semester</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.semester}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Address</p>
-                    <p className="font-medium text-gray-800">
-                      {selectedStudent.address || "N/A"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500">Status</p>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        selectedStudent.feeStatus === "Paid"
-                          ? "bg-green-100 text-green-700"
-                          : selectedStudent.feeStatus === "Partial"
-                            ? "bg-yellow-100 text-yellow-700"
-                            : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {selectedStudent.feeStatus || "Pending"}
-                    </span>
-                  </div>
+                <div>
+                  <p className="text-xs text-gray-500">Enrollment No</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.enrollmentNo || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Name</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.name}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Email</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.email}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Phone</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.phone}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Course</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.course}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Semester</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.semester}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500">Status</p>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      selectedStudent.status === "Active"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {selectedStudent.status}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500">Address</p>
+                  <p className="font-medium text-gray-800">
+                    {selectedStudent.address || "N/A"}
+                  </p>
+                </div>
+                <div className="col-span-2">
+                  <p className="text-xs text-gray-500">Fee Status</p>
+                  <span
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      selectedStudent.feeStatus === "Paid"
+                        ? "bg-green-100 text-green-700"
+                        : selectedStudent.feeStatus === "Partial"
+                          ? "bg-yellow-100 text-yellow-700"
+                          : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {selectedStudent.feeStatus || "Pending"}
+                  </span>
                 </div>
               </div>
 
@@ -443,19 +434,23 @@ export default function Students() {
                 </div>
               </div>
 
-              {/* Quick Actions */}
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <button className="px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition flex items-center justify-center gap-2">
-                  <FontAwesomeIcon icon={faFileInvoice} />
-                  Collect Fee
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                    window.location.href = `/accountant-dashboard/fee-collection?student=${selectedStudent._id}`;
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition"
+                >
+                  <FileText size={16} className="inline mr-2" /> Collect Fee
                 </button>
-                <button className="px-4 py-2.5 border border-blue-600 text-blue-600 rounded-xl hover:bg-blue-50 transition flex items-center justify-center gap-2">
-                  <FontAwesomeIcon icon={faReceipt} />
-                  View Receipts
-                </button>
-                <button className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center justify-center gap-2 col-span-2">
-                  <FontAwesomeIcon icon={faHistory} />
-                  Payment History
+                <button
+                  onClick={() => {
+                    setShowViewModal(false);
+                  }}
+                  className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition"
+                >
+                  Close
                 </button>
               </div>
             </div>
@@ -464,4 +459,6 @@ export default function Students() {
       )}
     </div>
   );
-}
+};
+
+export default Students;

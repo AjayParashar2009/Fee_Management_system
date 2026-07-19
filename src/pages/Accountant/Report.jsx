@@ -1,43 +1,31 @@
+// src/pages/Accountant/Report.jsx
 import React, { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faFilePdf,
-  faFileExcel,
-  faPrint,
-  faChartBar,
-  faChartLine,
-  faChartPie,
-  faDownload,
-  faCalendar,
-  faFilter,
-  faEye,
-  faIndianRupeeSign,
-  faUsers,
-  faFileInvoice,
-  faMoneyBillWave,
-  faReceipt,
-  faClock,
-  faCheckCircle,
-  faTimesCircle,
-  faSearch,
-  faRefresh,
-  faArrowUp,
-  faArrowDown,
-  faTimes,
-  faBuilding,
-  faGraduationCap,
-  faCreditCard,
-  faWallet,
-  faUniversity,
-  faMobileAlt,
-  faSpinner,
-  faExclamationCircle,
-  faInfoCircle,
-} from "@fortawesome/free-solid-svg-icons";
+  FileText,
+  Download,
+  Printer,
+  Calendar,
+  Filter,
+  Search,
+  RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Users,
+  IndianRupee,
+  Clock,
+  CheckCircle,
+  AlertCircle,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  BarChart,
+} from "lucide-react";
 import Table from "../../Components/Table/Tables";
-import { reportService } from "../../services/reportService";
+import StatCards from "../../Components/Cards/StatCards";
+import { reportAPI } from "../../api";
+import toast from "react-hot-toast";
 
-export default function Reports() {
+const Report = () => {
   const theme = {
     primary: "bg-blue-600",
     hover: "hover:bg-blue-500",
@@ -45,24 +33,7 @@ export default function Reports() {
     text: "text-blue-600",
   };
 
-  const [reportType, setReportType] = useState("fee");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [selectedCourse, setSelectedCourse] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
-  const [selectedMethod, setSelectedMethod] = useState("all");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [apiError, setApiError] = useState("");
-  const [toastMessage, setToastMessage] = useState("");
-  const [toastType, setToastType] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
-  const [sortField, setSortField] = useState("date");
-  const [sortDirection, setSortDirection] = useState("desc");
-
+  const [loading, setLoading] = useState(true);
   const [reportData, setReportData] = useState({
     summary: {
       totalStudents: 0,
@@ -74,179 +45,164 @@ export default function Reports() {
       collectionRate: 0,
     },
     students: [],
-    collections: [],
   });
-  const [transactionData, setTransactionData] = useState([]);
-  const [feeBreakdown, setFeeBreakdown] = useState([]);
-  const [paymentMethods, setPaymentMethods] = useState([]);
-  const [monthlyRevenue, setMonthlyRevenue] = useState([]);
+  const [filters, setFilters] = useState({ course: "", semester: "" });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showDateRangeModal, setShowDateRangeModal] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     fetchReportData();
-  }, []);
+  }, [filters]);
 
-  // Show toast notification
-  const showToast = (message, type = "success") => {
-    setToastMessage(message);
-    setToastType(type);
-    setTimeout(() => {
-      setToastMessage("");
-      setToastType("");
-    }, 3000);
-  };
-
-  // ✅ Fetch Report Data using reportService
   const fetchReportData = async () => {
     try {
-      setIsLoading(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setApiError("Please login first");
-        setIsLoading(false);
-        return;
-      }
-
-      const response = await reportService.getDashboard();
-
-      console.log("Report Data:", response.data);
-
+      setLoading(true);
+      const response = await reportAPI.getFeeReport(filters);
       if (response.data.success) {
-        const data = response.data.data;
-
-        setReportData({
-          summary: {
-            totalStudents: data.students?.total || 0,
-            paidStudents: data.students?.total - data.students?.pending || 0,
-            partialStudents: 0,
-            pendingStudents: data.students?.pending || 0,
-            totalCollected: data.month?.total || 0,
-            totalPending: data.pendingFees?.total || 0,
-            collectionRate:
-              data.students?.total > 0
-                ? Math.round(
-                    ((data.students?.total - data.students?.pending) /
-                      data.students?.total) *
-                      100,
-                  )
-                : 0,
-          },
-          students: [],
-          collections: data.recentCollections || [],
-        });
-
-        if (data.recentCollections && data.recentCollections.length > 0) {
-          setTransactionData(
-            data.recentCollections.map((item) => ({
-              _id: item._id || `txn-${Date.now()}-${Math.random()}`,
-              receiptId:
-                item.receiptNo || `RCPT${String(item._id || "").slice(-6)}`,
-              student: item.student?.name || "Unknown",
-              course: item.student?.course || "N/A",
-              amount: item.amount || 0,
-              date: new Date(item.date).toLocaleDateString("en-IN"),
-              method: item.paymentMethod || "N/A",
-              status: item.status || "Completed",
-              feeType: item.feeType || "Other",
-            })),
-          );
-        }
-
-        setFeeBreakdown([
-          { type: "Tuition Fee", amount: 320000, percentage: 60.1 },
-          { type: "Admission Fee", amount: 85000, percentage: 16.0 },
-          { type: "Exam Fee", amount: 65000, percentage: 12.2 },
-          { type: "Library Fee", amount: 32000, percentage: 6.0 },
-          { type: "Other Fee", amount: 30000, percentage: 5.7 },
-        ]);
-
-        setPaymentMethods([
-          { name: "UPI", count: 72, percentage: 46 },
-          { name: "Credit Card", count: 45, percentage: 29 },
-          { name: "Net Banking", count: 25, percentage: 16 },
-          { name: "Cash", count: 10, percentage: 6 },
-          { name: "Debit Card", count: 4, percentage: 3 },
-        ]);
-
-        setMonthlyRevenue([
-          { month: "Jan", amount: 42000 },
-          { month: "Feb", amount: 38000 },
-          { month: "Mar", amount: 45000 },
-          { month: "Apr", amount: 52000 },
-          { month: "May", amount: 48000 },
-          { month: "Jun", amount: 35000 },
-          { month: "Jul", amount: 41000 },
-          { month: "Aug", amount: 39000 },
-          { month: "Sep", amount: 46000 },
-          { month: "Oct", amount: 43000 },
-          { month: "Nov", amount: 50000 },
-          { month: "Dec", amount: 47000 },
-        ]);
-
-        showToast("Report data loaded successfully!", "success");
+        setReportData(response.data.data);
       }
     } catch (error) {
-      console.error("Error fetching report data:", error);
-      if (error.response) {
-        setApiError(
-          error.response.data.message || "Failed to fetch report data",
-        );
-        showToast(
-          error.response.data.message || "Failed to fetch report data",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
+      console.error("Error fetching report:", error);
+      toast.error("Failed to load report");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-  return (
-    <div className="space-y-6">
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div
-          className={`fixed top-20 right-4 z-50 p-4 rounded-xl shadow-lg max-w-md ${
-            toastType === "success"
-              ? "bg-green-50 border border-green-200 text-green-700"
-              : toastType === "error"
-                ? "bg-red-50 border border-red-200 text-red-700"
-                : "bg-blue-50 border border-blue-200 text-blue-700"
+
+  const handleExportPDF = async () => {
+    try {
+      toast.loading("Generating PDF...");
+      const response = await reportAPI.exportPDF("fee", filters);
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      toast.dismiss();
+      toast.success("PDF downloaded successfully!");
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Failed to generate PDF");
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      toast.loading("Generating Excel...");
+      const response = await reportAPI.exportExcel("fee", filters);
+      const blob = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      window.open(url, "_blank");
+      toast.dismiss();
+      toast.success("Excel downloaded successfully!");
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Failed to generate Excel");
+    }
+  };
+
+  const filteredStudents =
+    reportData.students?.filter(
+      (s) =>
+        s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.course?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.enrollmentNo?.toLowerCase().includes(searchTerm.toLowerCase()),
+    ) || [];
+
+  const columns = [
+    { header: "Enrollment", accessor: "enrollmentNo" },
+    { header: "Name", accessor: "name" },
+    { header: "Course", accessor: "course" },
+    { header: "Semester", accessor: "semester" },
+    {
+      header: "Total",
+      accessor: "totalFees",
+      render: (row) => `₹${(row.totalFees || 0).toLocaleString()}`,
+    },
+    {
+      header: "Paid",
+      accessor: "paidFees",
+      render: (row) => `₹${(row.paidFees || 0).toLocaleString()}`,
+    },
+    {
+      header: "Pending",
+      accessor: "pendingFees",
+      render: (row) => `₹${(row.pendingFees || 0).toLocaleString()}`,
+    },
+    {
+      header: "Status",
+      accessor: "feeStatus",
+      render: (row) => (
+        <span
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            row.feeStatus === "Paid"
+              ? "bg-green-100 text-green-700"
+              : row.feeStatus === "Partial"
+                ? "bg-yellow-100 text-yellow-700"
+                : "bg-red-100 text-red-700"
           }`}
         >
-          <div className="flex items-center gap-3">
-            <FontAwesomeIcon
-              icon={
-                toastType === "success"
-                  ? faCheckCircle
-                  : toastType === "error"
-                    ? faExclamationCircle
-                    : faInfoCircle
-              }
-              className={
-                toastType === "success"
-                  ? "text-green-500"
-                  : toastType === "error"
-                    ? "text-red-500"
-                    : "text-blue-500"
-              }
-            />
-            <p className="text-sm font-medium">{toastMessage}</p>
-            <button
-              onClick={() => {
-                setToastMessage("");
-                setToastType("");
-              }}
-              className="ml-auto text-gray-400 hover:text-gray-600"
-            >
-              <FontAwesomeIcon icon={faTimes} />
-            </button>
-          </div>
-        </div>
-      )}
+          {row.feeStatus || "Pending"}
+        </span>
+      ),
+    },
+  ];
 
+  const stats = reportData.summary
+    ? [
+        {
+          label: "Total Students",
+          value: reportData.summary.totalStudents || 0,
+          icon: "👨‍🎓",
+        },
+        {
+          label: "Paid",
+          value: reportData.summary.paidStudents || 0,
+          icon: "✅",
+        },
+        {
+          label: "Partial",
+          value: reportData.summary.partialStudents || 0,
+          icon: "🔄",
+        },
+        {
+          label: "Pending",
+          value: reportData.summary.pendingStudents || 0,
+          icon: "⏳",
+        },
+        {
+          label: "Collected",
+          value: `₹${(reportData.summary.totalCollected || 0).toLocaleString()}`,
+          icon: "💰",
+        },
+        {
+          label: "Pending Fees",
+          value: `₹${(reportData.summary.totalPending || 0).toLocaleString()}`,
+          icon: "📊",
+        },
+        {
+          label: "Collection Rate",
+          value: `${reportData.summary.collectionRate || 0}%`,
+          icon: "📈",
+        },
+      ]
+    : [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-500">Loading reports...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -259,620 +215,131 @@ export default function Reports() {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={handleRefresh}
-            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
-          >
-            <FontAwesomeIcon icon={faRefresh} />
-            Refresh
-          </button>
-          <button
             onClick={() => setShowDateRangeModal(true)}
             className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
           >
-            <FontAwesomeIcon icon={faCalendar} />
-            Date Range
+            <Calendar size={18} /> Date Range
           </button>
           <button
-            onClick={() => setShowExportModal(true)}
-            className={`${theme.primary} text-white px-5 py-2.5 rounded-xl hover:${theme.hover} transition flex items-center gap-2 shadow-sm`}
+            onClick={handleExportPDF}
+            className="px-4 py-2.5 bg-red-600 text-white rounded-xl hover:bg-red-700 transition flex items-center gap-2 shadow-sm"
           >
-            <FontAwesomeIcon icon={faDownload} />
-            Export Report
+            <FileText size={18} /> Export PDF
           </button>
-          <button className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2">
-            <FontAwesomeIcon icon={faPrint} />
-            Print
+          <button
+            onClick={handleExportExcel}
+            className="px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition flex items-center gap-2 shadow-sm"
+          >
+            <FileText size={18} /> Export Excel
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition flex items-center gap-2"
+          >
+            <Printer size={18} /> Print
           </button>
         </div>
       </div>
 
-      {/* API Error */}
-      {apiError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationCircle}
-            className="text-red-500"
-          />
-          <span>{apiError}</span>
-          <button
-            onClick={() => setApiError("")}
-            className="ml-auto text-red-500 hover:text-red-700"
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+        {stats.map((stat, index) => (
+          <div
+            key={index}
+            className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition"
           >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
-        </div>
-      )}
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Total Revenue
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                ₹{summaryData.totalCollected.toLocaleString()}
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-blue-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faMoneyBillWave}
-                className="text-lg text-blue-600"
-              />
+            <div className="flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-500 truncate">
+                  {stat.label}
+                </p>
+                <h3 className="text-lg font-bold text-gray-800 mt-1">
+                  {stat.value}
+                </h3>
+              </div>
+              <div className="text-2xl opacity-50 flex-shrink-0">
+                {stat.icon}
+              </div>
             </div>
           </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Total Paid
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                ₹{Math.round(summaryData.totalCollected * 0.8).toLocaleString()}
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-green-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faCheckCircle}
-                className="text-lg text-green-600"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Pending Fees
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                ₹{summaryData.totalPending.toLocaleString()}
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-yellow-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faClock}
-                className="text-lg text-yellow-600"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Total Students
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                {summaryData.totalStudents}
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-purple-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faUsers}
-                className="text-lg text-purple-600"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Collection Rate
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                {summaryData.collectionRate}%
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-indigo-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faChartPie}
-                className="text-lg text-indigo-600"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 hover:shadow-md transition">
-          <div className="flex items-center justify-between">
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-500 truncate">
-                Transactions
-              </p>
-              <h3 className="text-lg font-bold text-gray-800 mt-1">
-                {filteredTransactions.length}
-              </h3>
-            </div>
-            <div className="p-2 rounded-xl bg-orange-100 flex-shrink-0">
-              <FontAwesomeIcon
-                icon={faFileInvoice}
-                className="text-lg text-orange-600"
-              />
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {/* Filters Section */}
+      {/* Filters */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">
-              Report Type:
-            </label>
-            <select
-              value={reportType}
-              onChange={(e) => setReportType(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-            >
-              <option value="fee">Fee Reports</option>
-              <option value="student">Student Reports</option>
-              <option value="collection">Collection Reports</option>
-              <option value="payment">Payment Reports</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Course:</label>
-            <select
-              value={selectedCourse}
-              onChange={(e) => setSelectedCourse(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-            >
-              <option value="all">All Courses</option>
-              <option value="B.Tech">B.Tech</option>
-              <option value="MCA">MCA</option>
-              <option value="MBA">MBA</option>
-              <option value="BCA">BCA</option>
-              <option value="BBA">BBA</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-2">
-            <label className="text-sm font-medium text-gray-700">Status:</label>
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-            >
-              <option value="all">All Status</option>
-              <option value="Paid">Paid</option>
-              <option value="Pending">Pending</option>
-              <option value="Overdue">Overdue</option>
-            </select>
-          </div>
-          <div className="flex-1 relative min-w-[150px]">
-            <FontAwesomeIcon
-              icon={faSearch}
+          <div className="flex-1 relative min-w-[200px]">
+            <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={18}
             />
             <input
               type="text"
-              placeholder="Search transactions..."
+              placeholder="Search students..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
             />
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleApplyFilters}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm"
-            >
-              <FontAwesomeIcon icon={faFilter} />
-              Apply
-            </button>
-            <button
-              onClick={handleResetFilters}
-              className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 text-sm"
-            >
-              Reset
-            </button>
-          </div>
+          <input
+            type="text"
+            placeholder="Filter by Course"
+            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm w-40"
+            value={filters.course}
+            onChange={(e) => setFilters({ ...filters, course: e.target.value })}
+          />
+          <input
+            type="number"
+            placeholder="Filter by Semester"
+            className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500 text-sm w-40"
+            value={filters.semester}
+            onChange={(e) =>
+              setFilters({ ...filters, semester: e.target.value })
+            }
+          />
+          <button
+            onClick={() => setFilters({ course: "", semester: "" })}
+            className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 text-sm"
+          >
+            Clear Filters
+          </button>
+          <button
+            onClick={fetchReportData}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2 text-sm"
+          >
+            <RefreshCw size={16} /> Refresh
+          </button>
         </div>
       </div>
 
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Revenue Chart */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-800">Revenue Overview</h3>
-            <select className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500">
-              <option>This Year</option>
-              <option>Last Year</option>
-              <option>This Month</option>
-            </select>
-          </div>
-          <div className="h-64">
-            <div className="flex items-end h-full space-x-2">
-              {monthlyRevenue.map((item, index) => (
-                <div key={index} className="flex-1 flex flex-col items-center">
-                  <div
-                    className="w-full bg-blue-500 rounded-t hover:bg-blue-600 transition cursor-pointer"
-                    style={{
-                      height: `${(item.amount / 52000) * 100}%`,
-                      minHeight: "10px",
-                    }}
-                  ></div>
-                  <span className="text-xs text-gray-500 mt-1">
-                    {item.month}
-                  </span>
-                  <span className="text-xs font-medium text-gray-700">
-                    ₹{(item.amount / 1000).toFixed(0)}k
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Payment Status Distribution */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-4">Payment Status</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Paid</span>
-                <span className="font-medium">{summaryData.paidStudents}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                <div
-                  className="bg-green-600 h-2 rounded-full"
-                  style={{
-                    width: `${summaryData.totalStudents > 0 ? (summaryData.paidStudents / summaryData.totalStudents) * 100 : 0}%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Pending</span>
-                <span className="font-medium">
-                  {summaryData.pendingStudents}
-                </span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                <div
-                  className="bg-yellow-600 h-2 rounded-full"
-                  style={{
-                    width: `${summaryData.totalStudents > 0 ? (summaryData.pendingStudents / summaryData.totalStudents) * 100 : 0}%`,
-                  }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Second Row Charts */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Fee Breakdown */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-4">Fee Breakdown</h3>
-          <div className="space-y-3">
-            {feeBreakdown.map((item, index) => (
-              <div key={index}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">{item.type}</span>
-                  <span className="font-medium">
-                    ₹{item.amount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{ width: `${item.percentage}%` }}
-                  ></div>
-                </div>
-                <span className="text-xs text-gray-400">
-                  {item.percentage}%
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Payment Methods */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="font-semibold text-gray-800 mb-4">Payment Methods</h3>
-          <div className="space-y-3">
-            {paymentMethods.map((method, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
-                    <FontAwesomeIcon
-                      icon={
-                        method.name === "UPI"
-                          ? faMobileAlt
-                          : method.name === "Credit Card" ||
-                              method.name === "Debit Card"
-                            ? faCreditCard
-                            : method.name === "Net Banking"
-                              ? faUniversity
-                              : faWallet
-                      }
-                      className="text-gray-600"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-700">
-                      {method.name}
-                    </p>
-                    <p className="text-xs text-gray-400">
-                      {method.count} transactions
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-800">
-                    {method.percentage}%
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Transactions Table */}
+      {/* Student Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
+        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-800">Transaction Reports</h3>
+            <h3 className="font-semibold text-gray-800">Student Fee Details</h3>
             <p className="text-xs text-gray-500 mt-1">
-              {filteredTransactions.length} transactions found
+              {filteredStudents.length} students found
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => handleExport("PDF")}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-600 flex items-center gap-1"
-            >
-              <FontAwesomeIcon icon={faFilePdf} />
-              PDF
-            </button>
-            <button
-              onClick={() => handleExport("Excel")}
-              className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-600 flex items-center gap-1"
-            >
-              <FontAwesomeIcon icon={faFileExcel} />
-              Excel
-            </button>
-            <button className="px-3 py-1.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-sm text-gray-600 flex items-center gap-1">
-              <FontAwesomeIcon icon={faPrint} />
-              Print
-            </button>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <div className="max-h-[500px] overflow-y-auto">
-            <Table
-              title=""
-              columns={columns}
-              data={currentItems}
-              showViewAll={false}
-              theme={theme}
-            />
-          </div>
-        </div>
-
-        {/* Pagination */}
-        {filteredTransactions.length > itemsPerPage && (
-          <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
-            <span className="text-gray-500">
-              Showing {indexOfFirstItem + 1} to{" "}
-              {Math.min(indexOfLastItem, filteredTransactions.length)} of{" "}
-              {filteredTransactions.length} entries
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-gray-500">
+              Total: ₹
+              {filteredStudents
+                .reduce((sum, s) => sum + (s.pendingFees || 0), 0)
+                .toLocaleString()}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => paginate(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Previous
-              </button>
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    onClick={() => paginate(page)}
-                    className={`px-3 py-1 rounded-lg transition ${
-                      currentPage === page
-                        ? "bg-blue-600 text-white"
-                        : "border border-gray-200 hover:bg-gray-50 text-gray-600"
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ),
-              )}
-              <button
-                onClick={() => paginate(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
           </div>
-        )}
-
-        <div className="px-6 py-3 border-t border-gray-100 flex flex-wrap items-center justify-between text-sm gap-2">
-          <span className="text-gray-500">
-            Total: ₹
-            {filteredTransactions
-              .reduce((sum, t) => sum + (t.amount || 0), 0)
-              .toLocaleString()}
-          </span>
-          <span className="text-gray-500">
-            {filteredTransactions.length} records found
-          </span>
         </div>
+        <Table
+          title=""
+          columns={columns}
+          data={filteredStudents}
+          showViewAll={false}
+          theme={theme}
+        />
       </div>
-
-      {/* Export Modal */}
-      {showExportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Export Report</h2>
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-            <p className="text-gray-500 text-sm mb-6">
-              Choose a format to export the current report.
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => handleExport("PDF")}
-                className="w-full px-4 py-3 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition flex items-center justify-between"
-              >
-                <span className="font-medium">PDF Document</span>
-                <FontAwesomeIcon icon={faFilePdf} className="text-xl" />
-              </button>
-              <button
-                onClick={() => handleExport("Excel")}
-                className="w-full px-4 py-3 bg-green-50 text-green-600 rounded-xl hover:bg-green-100 transition flex items-center justify-between"
-              >
-                <span className="font-medium">Excel Spreadsheet</span>
-                <FontAwesomeIcon icon={faFileExcel} className="text-xl" />
-              </button>
-              <button
-                onClick={() => handleExport("CSV")}
-                className="w-full px-4 py-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-100 transition flex items-center justify-between"
-              >
-                <span className="font-medium">CSV File</span>
-                <FontAwesomeIcon icon={faFileInvoice} className="text-xl" />
-              </button>
-            </div>
-            <button
-              onClick={() => setShowExportModal(false)}
-              className="w-full mt-4 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Date Range Modal */}
-      {showDateRangeModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">
-                Select Date Range
-              </h2>
-              <button
-                onClick={() => setShowDateRangeModal(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <FontAwesomeIcon icon={faTimes} className="text-xl" />
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:outline-none focus:border-blue-500"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={() => {
-                    const today = new Date().toISOString().split("T")[0];
-                    setStartDate(today);
-                    setEndDate(today);
-                  }}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
-                >
-                  Today
-                </button>
-                <button
-                  onClick={() => {
-                    const today = new Date();
-                    const weekAgo = new Date(today);
-                    weekAgo.setDate(today.getDate() - 7);
-                    setStartDate(weekAgo.toISOString().split("T")[0]);
-                    setEndDate(today.toISOString().split("T")[0]);
-                  }}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
-                >
-                  This Week
-                </button>
-                <button
-                  onClick={() => {
-                    const today = new Date();
-                    const monthAgo = new Date(today);
-                    monthAgo.setMonth(today.getMonth() - 1);
-                    setStartDate(monthAgo.toISOString().split("T")[0]);
-                    setEndDate(today.toISOString().split("T")[0]);
-                  }}
-                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition text-sm font-medium"
-                >
-                  This Month
-                </button>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 mt-6">
-              <button
-                onClick={() => setShowDateRangeModal(false)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition font-medium"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApplyDateRange}
-                className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition font-medium"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
-}
+};
+
+export default Report;

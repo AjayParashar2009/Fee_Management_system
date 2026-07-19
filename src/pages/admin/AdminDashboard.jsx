@@ -1,61 +1,41 @@
+// src/pages/admin/AdminDashboard.jsx
 import React from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  faHome,
-  faUsers,
-  faUserGroup,
-  faIndianRupee,
-  faReceipt,
-  faArrowRightFromBracket,
-  faChartBar,
-} from "@fortawesome/free-solid-svg-icons";
 import { Outlet } from "react-router-dom";
+import {
+  LayoutDashboard,
+  Users,
+  UserCog,
+  GraduationCap,
+  FileText,
+  LogOut,
+} from "lucide-react";
 import DashboardLayout from "../../Components/Layout/DashboardLayout";
 
-export default function AdminDashboard() {
+const AdminDashboard = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // Clear localStorage
     localStorage.removeItem("token");
     localStorage.removeItem("user");
-
-    // Navigate to login page
     navigate("/login");
   };
 
   const adminMenu = [
-    {
-      title: "Dashboard",
-      icon: faHome,
-      path: "/admin-dashboard",
-    },
-    {
-      title: "Students",
-      icon: faUsers,
-      path: "/admin-dashboard/students",
-    },
+    { title: "Dashboard", icon: LayoutDashboard, path: "/admin-dashboard" },
+    { title: "Students", icon: Users, path: "/admin-dashboard/students" },
     {
       title: "Accountants",
-      icon: faUserGroup,
+      icon: UserCog,
       path: "/admin-dashboard/accountants",
     },
     {
       title: "Fee Structure",
-      icon: faIndianRupee,
+      icon: GraduationCap,
       path: "/admin-dashboard/fee-structure",
     },
-    {
-      title: "Reports",
-      icon: faReceipt,
-      path: "/admin-dashboard/reports",
-    },
-    {
-      title: "Logout",
-      icon: faArrowRightFromBracket,
-      path: "#",
-      onClick: handleLogout,
-    },
+    { title: "Reports", icon: FileText, path: "/admin-dashboard/reports" },
+    { title: "Logout", icon: LogOut, path: "#", onClick: handleLogout },
   ];
 
   const adminTheme = {
@@ -75,4 +55,6 @@ export default function AdminDashboard() {
       <Outlet />
     </DashboardLayout>
   );
-}
+};
+
+export default AdminDashboard;

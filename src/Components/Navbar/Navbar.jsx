@@ -1,3 +1,4 @@
+// src/Components/Navbar/Navbar.jsx - FontAwesome Version
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -8,7 +9,7 @@ import {
   faArrowRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 
-export default function Navbar({ name, onLogout }) {
+const Navbar = ({ name, onLogout, onToggleSidebar, isSidebarOpen }) => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -24,9 +25,14 @@ export default function Navbar({ name, onLogout }) {
   return (
     <div className="h-16 bg-white border-b shadow-sm flex items-center justify-between px-6 shrink-0">
       <div className="flex items-center gap-4">
-        <div className="text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 p-2 rounded-lg cursor-pointer transition-all duration-200">
+        {/* ✅ Hamburger Menu Button */}
+        <button
+          onClick={onToggleSidebar}
+          className="text-slate-600 hover:text-emerald-600 hover:bg-emerald-50 p-2 rounded-lg cursor-pointer transition-all duration-200"
+          aria-label="Toggle Sidebar"
+        >
           <FontAwesomeIcon icon={faBars} className="text-xl" />
-        </div>
+        </button>
         <div className="text-lg font-semibold text-slate-900">{name}</div>
       </div>
       <div className="flex items-center gap-5">
@@ -47,4 +53,6 @@ export default function Navbar({ name, onLogout }) {
       </div>
     </div>
   );
-}
+};
+
+export default Navbar;

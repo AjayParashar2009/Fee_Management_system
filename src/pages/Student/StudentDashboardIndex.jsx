@@ -1,27 +1,21 @@
+// src/pages/Student/StudentDashboardIndex.jsx
 import React, { useState, useEffect } from "react";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
-  faIndianRupeeSign,
-  faCalendar,
-  faUsers,
-  faFileInvoice,
-  faCheckCircle,
-  faClock,
-  faWallet,
-  faChartLine,
-  faReceipt,
-  faExclamationTriangle,
-  faArrowTrendUp,
-  faArrowTrendDown,
-  faSpinner,
-  faBell,
-  faTimes,
-} from "@fortawesome/free-solid-svg-icons";
+  IndianRupee,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Wallet,
+  BookOpen,
+  TrendingUp,
+  AlertCircle,
+} from "lucide-react";
 import StatCards from "../../Components/Cards/StatCards";
 import Tables from "../../Components/Table/Tables";
-import { authService } from "../../services/authService";
+import { authAPI, collectionAPI } from "../../api";
+import toast from "react-hot-toast";
 
-export default function StudentDashboardIndex() {
+const StudentDashboardIndex = () => {
   const theme = {
     primary: "bg-purple-600",
     hover: "hover:bg-purple-500",
@@ -29,7 +23,6 @@ export default function StudentDashboardIndex() {
     text: "text-purple-600",
   };
 
-  const [isLoading, setIsLoading] = useState(true);
   const [studentData, setStudentData] = useState({
     name: "",
     totalFee: 0,
@@ -40,8 +33,7 @@ export default function StudentDashboardIndex() {
     status: "Pending",
   });
   const [recentPayments, setRecentPayments] = useState([]);
-  const [notifications, setNotifications] = useState([]);
-  const [apiError, setApiError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
@@ -49,140 +41,115 @@ export default function StudentDashboardIndex() {
 
   const fetchDashboardData = async () => {
     try {
-      setIsLoading(true);
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setApiError("Please login first");
-        setIsLoading(false);
-        return;
-      }
-
-      // ✅ Using authService instead of direct axios
-      const response = await authService.getProfile();
-
-      console.log("Student Data:", response.data);
-
+      setLoading(true);
+      const response = await authAPI.getProfile();
       if (response.data.success) {
-        const user = response.data.user;
-        const profile = response.data.profile || {};
-
+        const data = response.data.data;
         setStudentData({
-          name: profile.name || user.username || "Student",
-          totalFee: profile.totalFees || 0,
-          paidFee: profile.paidFees || 0,
-          pendingFee: profile.pendingFees || 0,
+          name: data.name || "Student",
+          totalFee: data.totalFees || 0,
+          paidFee: data.paidFees || 0,
+          pendingFee: data.pendingFees || 0,
           nextDueDate: "2024-05-30",
           paidPercentage:
-            profile.totalFees > 0
-              ? Math.round((profile.paidFees / profile.totalFees) * 100)
+            data.totalFees > 0
+              ? Math.round((data.paidFees / data.totalFees) * 100)
               : 0,
-          status: profile.feeStatus || "Pending",
+          status: data.feeStatus || "Pending",
         });
+
+        // Fetch recent payments
+        const paymentsRes = await collectionAPI.getAll();
+        if (paymentsRes.data.success) {
+          setRecentPayments(paymentsRes.data.data?.slice(0, 5) || []);
+        }
       }
     } catch (error) {
       console.error("Error fetching dashboard:", error);
-      if (error.response) {
-        setApiError(
-          error.response.data.message || "Failed to fetch dashboard data",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-      }
+      toast.error("Failed to load dashboard");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  // Stats Cards
   const cards = [
     {
       title: "Total Fee",
       value: `₹${studentData.totalFee.toLocaleString()}`,
       subtitle: "Total fee amount",
-      icon: faIndianRupeeSign,
+      icon: Wallet,
     },
     {
       title: "Paid Fee",
       value: `₹${studentData.paidFee.toLocaleString()}`,
       subtitle: "Amount paid",
-      icon: faCheckCircle,
+      icon: CheckCircle,
     },
     {
       title: "Remaining Fee",
       value: `₹${studentData.pendingFee.toLocaleString()}`,
       subtitle: "Pending amount",
-      icon: faClock,
+      icon: Clock,
     },
     {
       title: "Due Date",
       value: studentData.nextDueDate,
       subtitle: "Next payment due",
-      icon: faCalendar,
+      icon: Calendar,
     },
   ];
 
-  // Payment History Columns
   const paymentColumns = [
-    { header: "Receipt", accessor: "receipt" },
-    { header: "Date", accessor: "date" },
-    { header: "Amount", accessor: "amount" },
+    { header: "Receipt", accessor: "receiptNo" },
+    {
+      header: "Date",
+      accessor: "date",
+      render: (row) => new Date(row.date).toLocaleDateString(),
+    },
+    {
+      header: "Amount",
+      accessor: "amount",
+      render: (row) => `₹${row.amount?.toLocaleString() || 0}`,
+    },
     {
       header: "Status",
       accessor: "status",
       render: (row) => (
         <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">
-          {row.status}
+          {row.status === "Completed" ? "Paid" : row.status}
         </span>
       ),
     },
   ];
 
-  const paymentData = [
-    {
-      receipt: "RCPT1001",
-      date: "20 May 2024",
-      amount: "₹12,500",
-      status: "Paid",
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-purple-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading dashboard...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading)
+    return <div className="text-center py-10">Loading dashboard...</div>;
 
   return (
-    <>
-      {apiError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-xl mb-6 flex items-center gap-2">
-          <FontAwesomeIcon
-            icon={faExclamationTriangle}
-            className="text-red-500"
-          />
-          <span>{apiError}</span>
-          <button
-            onClick={() => setApiError("")}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            <FontAwesomeIcon icon={faTimes} />
-          </button>
+    <div className="space-y-6">
+      {/* Welcome Section */}
+      <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 text-white">
+        <h2 className="text-2xl font-bold">
+          Welcome back, {studentData.name}! 👋
+        </h2>
+        <p className="mt-2 opacity-90">
+          Here's your fee summary and recent activity.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-4">
+          <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+            Status: <span className="font-semibold">{studentData.status}</span>
+          </span>
+          <span className="px-3 py-1 bg-white/20 rounded-full text-sm">
+            Progress:{" "}
+            <span className="font-semibold">{studentData.paidPercentage}%</span>
+          </span>
         </div>
-      )}
+      </div>
 
       <StatCards cards={cards} theme={theme} />
 
       {/* Progress Bar */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-semibold text-gray-800">Payment Progress</h3>
           <span className="text-sm font-medium text-purple-600">
@@ -193,7 +160,7 @@ export default function StudentDashboardIndex() {
           <div
             className="bg-purple-600 h-3 rounded-full transition-all duration-1000"
             style={{ width: `${studentData.paidPercentage}%` }}
-          ></div>
+          />
         </div>
         <div className="flex justify-between mt-2 text-xs text-gray-500">
           <span>₹0</span>
@@ -201,12 +168,15 @@ export default function StudentDashboardIndex() {
         </div>
       </div>
 
+      {/* Recent Payments */}
       <Tables
         title="Recent Collections"
         columns={paymentColumns}
-        data={paymentData}
+        data={recentPayments}
         theme={theme}
       />
-    </>
+    </div>
   );
-}
+};
+
+export default StudentDashboardIndex;
