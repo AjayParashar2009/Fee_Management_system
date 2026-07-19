@@ -26,9 +26,7 @@ import {
   faPrint,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { studentService } from "../../services/studentService";
 
 export default function Students() {
   const theme = {
@@ -52,8 +50,6 @@ export default function Students() {
   const [sortField, setSortField] = useState("name");
   const [sortDirection, setSortDirection] = useState("asc");
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchStudents();
   }, []);
@@ -68,10 +64,11 @@ export default function Students() {
     }, 3000);
   };
 
+  // ✅ Fetch Students using studentService
   const fetchStudents = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -79,9 +76,7 @@ export default function Students() {
         return;
       }
 
-      const response = await axios.get(`${url}/students`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await studentService.getAll();
 
       console.log("Students Response:", response.data);
 
@@ -105,255 +100,6 @@ export default function Students() {
       setIsLoading(false);
     }
   };
-
-  // Handle Sort
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  // Handle Refresh
-  const handleRefresh = () => {
-    fetchStudents();
-    showToast("Data refreshed!", "info");
-  };
-
-  // Handle Export
-  const handleExport = () => {
-    const exportData = filteredStudents.map((s) => ({
-      Name: s.name,
-      Email: s.email,
-      Course: s.course,
-      Semester: s.semester,
-      Phone: s.phone,
-      "Total Fee": s.totalFees || 0,
-      Paid: s.paidFees || 0,
-      Pending: s.pendingFees || 0,
-      Status: s.feeStatus || "Pending",
-    }));
-    console.log("Exporting data:", exportData);
-    showToast("Data exported successfully!", "success");
-  };
-
-  // Stats Cards
-  const statsCards = [
-    {
-      title: "Total Students",
-      value: students.length,
-      subtitle: "All students",
-      icon: faUserGraduate,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
-    },
-    {
-      title: "Fee Paid",
-      value: students.filter((s) => s.feeStatus === "Paid").length,
-      subtitle: "Completed payments",
-      icon: faUserCheck,
-      color: "text-green-600",
-      bg: "bg-green-100",
-    },
-    {
-      title: "Fee Pending",
-      value: students.filter(
-        (s) => s.feeStatus === "Pending" || s.feeStatus === "Partial",
-      ).length,
-      subtitle: "Need payment",
-      icon: faUserTimes,
-      color: "text-red-600",
-      bg: "bg-red-100",
-    },
-    {
-      title: "Total Collection",
-      value: `₹${students.reduce((sum, s) => sum + (s.paidFees || 0), 0).toLocaleString()}`,
-      subtitle: "All time",
-      icon: faIndianRupeeSign,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
-    },
-  ];
-
-  // Table Columns
-  const columns = [
-    {
-      header: "Student ID",
-      accessor: "_id",
-      render: (row) => row._id?.slice(-6) || "N/A",
-    },
-    {
-      header: "Name",
-      accessor: "name",
-    },
-    {
-      header: "Email",
-      accessor: "email",
-    },
-    {
-      header: "Course",
-      accessor: "course",
-    },
-    {
-      header: "Semester",
-      accessor: "semester",
-    },
-    {
-      header: "Phone",
-      accessor: "phone",
-    },
-    {
-      header: "Total Fee",
-      accessor: "totalFees",
-      render: (row) => `₹${row.totalFees?.toLocaleString() || 0}`,
-    },
-    {
-      header: "Paid",
-      accessor: "paidFees",
-      render: (row) => `₹${row.paidFees?.toLocaleString() || 0}`,
-    },
-    {
-      header: "Pending",
-      accessor: "pendingFees",
-      render: (row) => (
-        <span
-          className={
-            row.pendingFees > 0 ? "text-red-600 font-medium" : "text-green-600"
-          }
-        >
-          ₹{row.pendingFees?.toLocaleString() || 0}
-        </span>
-      ),
-    },
-    {
-      header: "Status",
-      accessor: "feeStatus",
-      render: (row) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            row.feeStatus === "Paid"
-              ? "bg-green-100 text-green-700"
-              : row.feeStatus === "Partial"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-red-100 text-red-700"
-          }`}
-        >
-          {row.feeStatus || "Pending"}
-        </span>
-      ),
-    },
-    {
-      header: "Action",
-      accessor: "actions",
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleViewStudent(row)}
-            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-            title="View"
-          >
-            <FontAwesomeIcon icon={faEye} />
-          </button>
-          <button
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-            title="Collect Fee"
-          >
-            <FontAwesomeIcon icon={faFileInvoice} />
-          </button>
-          <button
-            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
-            title="Payment History"
-          >
-            <FontAwesomeIcon icon={faHistory} />
-          </button>
-        </div>
-      ),
-    },
-  ];
-
-  // Handle View Student
-  const handleViewStudent = (student) => {
-    setSelectedStudent(student);
-    setShowStudentModal(true);
-  };
-
-  // Filter and sort students
-  const getFilteredStudents = () => {
-    let filtered = students.filter((student) => {
-      if (selectedStatus === "all") return true;
-      if (selectedStatus === "Paid") return student.feeStatus === "Paid";
-      if (selectedStatus === "Partial") return student.feeStatus === "Partial";
-      if (selectedStatus === "Pending") return student.feeStatus === "Pending";
-      return true;
-    });
-
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (student) =>
-          student.name?.toLowerCase().includes(search) ||
-          student.course?.toLowerCase().includes(search) ||
-          student.enrollmentNo?.toLowerCase().includes(search) ||
-          student.email?.toLowerCase().includes(search),
-      );
-    }
-
-    // Sort
-    filtered = filtered.sort((a, b) => {
-      let aVal = a[sortField] || "";
-      let bVal = b[sortField] || "";
-
-      if (
-        sortField === "totalFees" ||
-        sortField === "paidFees" ||
-        sortField === "pendingFees"
-      ) {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      }
-
-      if (typeof aVal === "string") {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  };
-
-  const filteredStudents = getFilteredStudents();
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredStudents.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-blue-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading students...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

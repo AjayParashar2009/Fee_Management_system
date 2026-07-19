@@ -27,9 +27,8 @@ import {
   faInfoCircle,
   faRefresh,
 } from "@fortawesome/free-solid-svg-icons";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { authService } from "../../services/authService";
+import { studentService } from "../../services/studentService";
 
 export default function Profile() {
   const [isLoading, setIsLoading] = useState(true);
@@ -80,7 +79,6 @@ export default function Profile() {
     confirmPassword: "",
   });
 
-  const getToken = () => localStorage.getItem("token");
   const getUser = () => {
     try {
       const user = localStorage.getItem("user");
@@ -107,7 +105,7 @@ export default function Profile() {
   const fetchProfile = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -115,11 +113,8 @@ export default function Profile() {
         return;
       }
 
-      const response = await axios.get(`${url}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // ✅ Using authService instead of direct axios
+      const response = await authService.getProfile();
 
       console.log("Profile API Response:", response.data);
 
@@ -128,7 +123,6 @@ export default function Profile() {
         const profile = response.data.profile || {};
         const storedUser = getUser();
 
-        // Combine all data sources
         const studentData = {
           _id: profile._id || "",
           name: profile.name || storedUser?.name || user.username || "",
@@ -174,109 +168,6 @@ export default function Profile() {
     }
   };
 
-  // Handle Input Change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-    if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: "",
-      }));
-    }
-  };
-
-  // Handle Password Change
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
-    setPasswordData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  // Handle Image Upload
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      showToast("Please upload an image file", "error");
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast("Image size should be less than 5MB", "error");
-      return;
-    }
-
-    try {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImage(reader.result);
-        setFormData((prev) => ({
-          ...prev,
-          profileImage: reader.result,
-        }));
-        showToast("Image uploaded successfully!", "success");
-      };
-      reader.readAsDataURL(file);
-    } catch (error) {
-      console.error("Image upload error:", error);
-      showToast("Failed to upload image", "error");
-    }
-  };
-
-  // Handle Image Remove
-  const handleImageRemove = () => {
-    setProfileImage(null);
-    setFormData((prev) => ({
-      ...prev,
-      profileImage: null,
-    }));
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
-    showToast("Image removed", "info");
-  };
-
-  // Validate Form
-  const validateForm = () => {
-    const newErrors = {};
-    if (!formData.name.trim()) newErrors.name = "Name is required";
-    if (!formData.email.trim()) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email))
-      newErrors.email = "Email is invalid";
-    if (!formData.mobile.trim()) newErrors.mobile = "Mobile is required";
-    else if (!/^\d{10}$/.test(formData.mobile.replace(/\s/g, ""))) {
-      newErrors.mobile = "Mobile must be 10 digits";
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  // Validate Password
-  const validatePassword = () => {
-    const newErrors = {};
-    if (!passwordData.currentPassword) {
-      newErrors.currentPassword = "Current password is required";
-    }
-    if (!passwordData.newPassword) {
-      newErrors.newPassword = "New password is required";
-    } else if (passwordData.newPassword.length < 6) {
-      newErrors.newPassword = "Password must be at least 6 characters";
-    }
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-    return Object.keys(newErrors).length === 0;
-  };
-
   // Handle Save Profile
   const handleSaveProfile = async () => {
     if (!validateForm()) return;
@@ -285,7 +176,6 @@ export default function Profile() {
     setApiError("");
 
     try {
-      const token = getToken();
       const studentId = student._id;
 
       // Prepare update data
@@ -302,17 +192,8 @@ export default function Profile() {
         bloodGroup: formData.bloodGroup,
       };
 
-      // Update student profile
-      const response = await axios.put(
-        `${url}/students/${studentId}`,
-        updateData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      // ✅ Using studentService instead of direct axios
+      const response = await studentService.update(studentId, updateData);
 
       if (response.data.success) {
         setStudent({ ...formData });
@@ -342,103 +223,6 @@ export default function Profile() {
       setIsSaving(false);
     }
   };
-
-  // Handle Cancel Edit
-  const handleCancelEdit = () => {
-    setFormData({ ...student });
-    setIsEditing(false);
-    setErrors({});
-    setApiError("");
-  };
-
-  // Handle Change Password
-  const handleChangePassword = async () => {
-    if (!validatePassword()) return;
-
-    setIsSaving(true);
-    setApiError("");
-
-    try {
-      const token = getToken();
-      const response = await axios.post(
-        `${url}/auth/change-password`,
-        passwordData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
-
-      if (response.data.success) {
-        setShowPasswordModal(false);
-        setPasswordData({
-          currentPassword: "",
-          newPassword: "",
-          confirmPassword: "",
-        });
-        showToast("Password changed successfully!", "success");
-      }
-    } catch (error) {
-      console.error("Change password error:", error);
-      if (error.response) {
-        setApiError(error.response.data.message || "Failed to change password");
-        showToast(
-          error.response.data.message || "Failed to change password",
-          "error",
-        );
-      } else {
-        setApiError("Failed to connect to server");
-        showToast("Failed to connect to server", "error");
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Handle Refresh
-  const handleRefresh = () => {
-    fetchProfile();
-    showToast("Profile refreshed!", "info");
-  };
-
-  // Handle Download Profile
-  const handleDownloadProfile = () => {
-    const profileData = {
-      name: student.name,
-      email: student.email,
-      phone: student.mobile,
-      course: student.course,
-      semester: student.semester,
-      address: student.address,
-      enrollmentNo: student.enrollmentNo,
-      fatherName: student.fatherName,
-      motherName: student.motherName,
-      dob: student.dob,
-      totalFees: student.totalFees,
-      paidFees: student.paidFees,
-      pendingFees: student.pendingFees,
-      feeStatus: student.feeStatus,
-    };
-    console.log("Downloading profile:", profileData);
-    showToast("Profile downloaded!", "success");
-  };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-purple-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading profile...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Toast Notification */}

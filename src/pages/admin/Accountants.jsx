@@ -30,9 +30,7 @@ import {
   faMapMarkerAlt,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { accountantService } from "../../services/accountantService";
 
 export default function Accountants() {
   const theme = {
@@ -52,8 +50,6 @@ export default function Accountants() {
   const [isLoading, setIsLoading] = useState(false);
   const [apiError, setApiError] = useState("");
   const [accountants, setAccountants] = useState([]);
-
-  const getToken = () => localStorage.getItem("token");
 
   // Form State
   const [formData, setFormData] = useState({
@@ -77,11 +73,11 @@ export default function Accountants() {
     fetchAccountants();
   }, []);
 
-  // Fetch accountants from API
+  // ✅ Fetch accountants using accountantService
   const fetchAccountants = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -89,11 +85,7 @@ export default function Accountants() {
         return;
       }
 
-      const response = await axios.get(`${url}/accountants`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await accountantService.getAll();
 
       console.log("Accountants Response:", response.data);
 
@@ -144,27 +136,11 @@ export default function Accountants() {
 
   // Table Columns
   const columns = [
-    {
-      header: "Employee ID",
-      accessor: "employeeId",
-    },
-    {
-      header: "Name",
-      accessor: "name",
-    },
-    {
-      header: "Email",
-      accessor: "email",
-    },
-    {
-      header: "Phone",
-      accessor: "phone",
-    },
-    {
-      header: "Department",
-      accessor: "department",
-    },
-
+    { header: "Employee ID", accessor: "employeeId" },
+    { header: "Name", accessor: "name" },
+    { header: "Email", accessor: "email" },
+    { header: "Phone", accessor: "phone" },
+    { header: "Department", accessor: "department" },
     {
       header: "Status",
       accessor: "status",
@@ -230,19 +206,12 @@ export default function Accountants() {
     setApiError("");
   };
 
-  // Handle Delete Click
+  // ✅ Handle Delete using accountantService
   const handleDeleteClick = async (id) => {
     if (window.confirm("Are you sure you want to delete this accountant?")) {
       try {
         setIsLoading(true);
-        const token = getToken();
-
-        await axios.delete(`${url}/accountants/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
+        await accountantService.delete(id);
         await fetchAccountants();
         alert("Accountant deleted successfully!");
       } catch (error) {
@@ -364,7 +333,7 @@ export default function Accountants() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle Add Accountant Submit
+  // ✅ Handle Add Accountant using accountantService
   const handleAddSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -373,7 +342,7 @@ export default function Accountants() {
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -396,12 +365,7 @@ export default function Accountants() {
 
       console.log("Creating accountant:", accountantData);
 
-      const response = await axios.post(`${url}/accountants`, accountantData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await accountantService.create(accountantData);
 
       console.log("Add Accountant Response:", response.data);
 
@@ -443,7 +407,7 @@ export default function Accountants() {
     }
   };
 
-  // Handle Edit Accountant Submit
+  // ✅ Handle Edit Accountant using accountantService
   const handleEditSubmit = async () => {
     if (!validateForm()) {
       return;
@@ -452,7 +416,7 @@ export default function Accountants() {
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -477,15 +441,9 @@ export default function Accountants() {
 
       const accountantId = editingAccountant._id || editingAccountant.id;
 
-      const response = await axios.put(
-        `${url}/accountants/${accountantId}`,
+      const response = await accountantService.update(
+        accountantId,
         accountantData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
       );
 
       if (response.data.success) {

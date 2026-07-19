@@ -23,9 +23,8 @@ import {
   faInfoCircle as faInfo,
   faRefresh,
 } from "@fortawesome/free-solid-svg-icons";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { authService } from "../../services/authService";
+import { feeService } from "../../services/feeService";
 
 export default function FeeDetails() {
   const [isLoading, setIsLoading] = useState(true);
@@ -52,8 +51,6 @@ export default function FeeDetails() {
     method: "upi",
   });
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchFeeDetails();
   }, []);
@@ -71,7 +68,7 @@ export default function FeeDetails() {
   const fetchFeeDetails = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -79,12 +76,8 @@ export default function FeeDetails() {
         return;
       }
 
-      // Fetch student profile
-      const response = await axios.get(`${url}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // ✅ Using authService instead of direct axios
+      const response = await authService.getProfile();
 
       console.log("Fee Details Response:", response.data);
 
@@ -129,12 +122,8 @@ export default function FeeDetails() {
 
   const fetchPaymentHistory = async () => {
     try {
-      const token = getToken();
-      const response = await axios.get(`${url}/fee-collections`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // ✅ Using feeService instead of direct axios
+      const response = await feeService.getAll();
 
       if (response.data.success) {
         const history = response.data.data || [];
@@ -216,31 +205,21 @@ export default function FeeDetails() {
   const handleProcessPayment = async () => {
     try {
       setIsProcessing(true);
-      const token = getToken();
 
       if (!selectedFee) {
         showToast("No fee selected", "error");
         return;
       }
 
-      // Call payment API
-      const response = await axios.post(
-        `${url}/fee-collections`,
-        {
-          studentId: selectedFee._id || "student-id",
-          feeType: selectedFee.type || "Tuition",
-          amount: parseFloat(paymentData.amount) || selectedFee.due,
-          paymentMethod: paymentData.method || "UPI",
-          date: new Date().toISOString().split("T")[0],
-          note: `Payment for ${selectedFee.type}`,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      // ✅ Using feeService instead of direct axios
+      const response = await feeService.create({
+        studentId: selectedFee._id || "student-id",
+        feeType: selectedFee.type || "Tuition",
+        amount: parseFloat(paymentData.amount) || selectedFee.due,
+        paymentMethod: paymentData.method || "UPI",
+        date: new Date().toISOString().split("T")[0],
+        note: `Payment for ${selectedFee.type}`,
+      });
 
       if (response.data.success) {
         setShowPaymentModal(false);
@@ -263,7 +242,7 @@ export default function FeeDetails() {
     showToast("Data refreshed!", "info");
   };
 
-  // Sample fee breakdown data (will be replaced with real API data)
+  // Sample fee breakdown data
   const feeBreakdownData = [
     {
       _id: "1",

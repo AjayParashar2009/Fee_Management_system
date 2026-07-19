@@ -1,6 +1,6 @@
+// src/components/Login.jsx
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUser,
@@ -10,9 +10,7 @@ import {
   faEyeSlash,
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
-
-const url = import.meta.env.VITE_BASE_URL || "http://localhost:3000";
-console.log("API URL:", url); // For debugging
+import { authService } from "../../services/authService"; 
 
 export default function Login() {
   const [loginData, setLoginData] = useState({
@@ -57,61 +55,57 @@ export default function Login() {
     }
   };
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setIsLoading(true);
     setApiError("");
 
-    axios
-      .post(`${url}/auth/login`, loginData)
-      .then((res) => {
-        console.log("Full Response:", res);
-        console.log("Response Data:", res.data);
+    try {
+      // ✅ Using authService instead of direct axios
+      const response = await authService.login(loginData);
+      console.log("✅ Full Response:", response);
+      console.log("✅ Response Data:", response.data);
 
-        const { success, message, token, user } = res.data;
+      const { success, message, token, user } = response.data;
 
-        if (success === true) {
-          localStorage.setItem("token", token);
-          localStorage.setItem("user", JSON.stringify(user));
+      if (success === true) {
+        localStorage.setItem("token", token);
+        localStorage.setItem("user", JSON.stringify(user));
 
-          // Navigate based on role from response
-          const userRole = user.role;
+        // Navigate based on role from response
+        const userRole = user.role;
 
-          switch (userRole) {
-            case "admin":
-              navigate("/admin-dashboard");
-              break;
-            case "accountant":
-              navigate("/accountant-dashboard");
-              break;
-            case "student":
-              navigate("/student-dashboard");
-              break;
-            default:
-              navigate("/");
-          }
-        } else {
-          setApiError(message || "Login failed. Please try again.");
+        switch (userRole) {
+          case "admin":
+            navigate("/admin-dashboard");
+            break;
+          case "accountant":
+            navigate("/accountant-dashboard");
+            break;
+          case "student":
+            navigate("/student-dashboard");
+            break;
+          default:
+            navigate("/");
         }
-      })
-      .catch((error) => {
-        console.error("Login Error:", error);
+      } else {
+        setApiError(message || "Login failed. Please try again.");
+      }
+    } catch (error) {
+      console.error("❌ Login Error:", error);
 
-        if (error.response) {
-          const errorMessage =
-            error.response.data?.message || "Login failed. Please try again.";
-          setApiError(errorMessage);
-          console.log("Error from server:", error.response.data);
-        } else if (error.request) {
-          setApiError(
-            "Cannot connect to server. Please check your connection.",
-          );
-        } else {
-          setApiError("Something went wrong. Please try again.");
-        }
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+      if (error.response) {
+        const errorMessage =
+          error.response.data?.message || "Login failed. Please try again.";
+        setApiError(errorMessage);
+        console.log("Error from server:", error.response.data);
+      } else if (error.request) {
+        setApiError("Cannot connect to server. Please check your connection.");
+      } else {
+        setApiError("Something went wrong. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleLoginClick = () => {

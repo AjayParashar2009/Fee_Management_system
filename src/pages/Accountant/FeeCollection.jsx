@@ -37,9 +37,9 @@ import {
   faPrint as faPrintIcon,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { feeService } from "../../services/feeService";
+import { studentService } from "../../services/studentService";
+import { receiptService } from "../../services/receiptService";
 
 export default function FeeCollection() {
   const theme = {
@@ -95,8 +95,6 @@ export default function FeeCollection() {
 
   const [errors, setErrors] = useState({});
 
-  const getToken = () => localStorage.getItem("token");
-
   // Fee Types
   const feeTypes = [
     { value: "Tuition", label: "Tuition Fee" },
@@ -136,13 +134,11 @@ export default function FeeCollection() {
     }, 3000);
   };
 
-  // Fetch Students
+  // ✅ Fetch Students using studentService
   const fetchStudents = async () => {
     try {
-      const token = getToken();
-      const response = await axios.get(`${url}/students`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const token = localStorage.getItem("token");
+      const response = await studentService.getAll();
       if (response.data.success) {
         setStudents(response.data.data || []);
       }
@@ -151,14 +147,11 @@ export default function FeeCollection() {
     }
   };
 
-  // Fetch Collections
+  // ✅ Fetch Collections using feeService
   const fetchCollections = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
-      const response = await axios.get(`${url}/fee-collections`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await feeService.getAll();
       if (response.data.success) {
         setCollections(response.data.data || []);
       }
@@ -171,13 +164,10 @@ export default function FeeCollection() {
     }
   };
 
-  // Fetch Summary
+  // ✅ Fetch Summary using feeService
   const fetchSummary = async () => {
     try {
-      const token = getToken();
-      const response = await axios.get(`${url}/fee-collections/summary`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await feeService.getSummary();
       if (response.data.success) {
         setSummaryData(response.data.data);
       }
@@ -229,32 +219,22 @@ export default function FeeCollection() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle Collect Fee
+  // ✅ Handle Collect Fee using feeService
   const handleCollectFee = async () => {
     if (!validateForm()) return;
 
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
 
-      const response = await axios.post(
-        `${url}/fee-collections`,
-        {
-          studentId: paymentData.studentId,
-          feeType: paymentData.feeType,
-          amount: parseFloat(paymentData.amount),
-          paymentMethod: paymentData.paymentMethod,
-          date: paymentData.date,
-          note: paymentData.note,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const response = await feeService.create({
+        studentId: paymentData.studentId,
+        feeType: paymentData.feeType,
+        amount: parseFloat(paymentData.amount),
+        paymentMethod: paymentData.paymentMethod,
+        date: paymentData.date,
+        note: paymentData.note,
+      });
 
       if (response.data.success) {
         const receiptData = {
@@ -301,54 +281,21 @@ export default function FeeCollection() {
     }
   };
 
-  // Handle Edit Collection
-  const handleEditClick = (collection) => {
-    setEditingCollection(collection);
-    setPaymentData({
-      studentId: collection.student?._id || collection.studentId || "",
-      feeType: collection.feeType || "",
-      amount: collection.amount || "",
-      paymentMethod: collection.paymentMethod || "",
-      date: collection.date
-        ? new Date(collection.date).toISOString().split("T")[0]
-        : new Date().toISOString().split("T")[0],
-      note: collection.note || "",
-    });
-    setSelectedStudent(
-      students.find(
-        (s) => s._id === (collection.student?._id || collection.studentId),
-      ),
-    );
-    setShowEditModal(true);
-    setErrors({});
-    setApiError("");
-  };
-
-  // Handle Update Collection
+  // ✅ Handle Update Collection using feeService
   const handleUpdateCollection = async () => {
     if (!validateForm()) return;
 
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
 
-      const response = await axios.put(
-        `${url}/fee-collections/${editingCollection._id}`,
-        {
-          feeType: paymentData.feeType,
-          amount: parseFloat(paymentData.amount),
-          paymentMethod: paymentData.paymentMethod,
-          date: paymentData.date,
-          note: paymentData.note,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const response = await feeService.update(editingCollection._id, {
+        feeType: paymentData.feeType,
+        amount: parseFloat(paymentData.amount),
+        paymentMethod: paymentData.paymentMethod,
+        date: paymentData.date,
+        note: paymentData.note,
+      });
 
       if (response.data.success) {
         setShowEditModal(false);
@@ -376,23 +323,11 @@ export default function FeeCollection() {
     }
   };
 
-  // Handle Delete Collection
-  const handleDeleteClick = (id) => {
-    setDeleteId(id);
-    setShowDeleteModal(true);
-  };
-
+  // ✅ Handle Delete Collection using feeService
   const handleDeleteConfirm = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
-
-      await axios.delete(`${url}/fee-collections/${deleteId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
+      await feeService.delete(deleteId);
       setShowDeleteModal(false);
       setDeleteId(null);
       await fetchAllData();
@@ -406,42 +341,25 @@ export default function FeeCollection() {
     }
   };
 
-  // Handle View Receipt
-  const handleViewReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowReceiptModal(true);
-  };
-
-  // Handle Print Receipt
-  const handlePrintReceipt = () => {
-    window.print();
-  };
-
-  // Handle Download Receipt
+  // ✅ Handle Download Receipt using receiptService
   const handleDownloadReceipt = async (receipt) => {
     try {
       setIsLoading(true);
-      const token = getToken();
 
       if (receipt.pdfUrl) {
-        window.open(`${url}${receipt.pdfUrl}`, "_blank");
+        window.open(
+          `${import.meta.env.VITE_BASE_URL}${receipt.pdfUrl}`,
+          "_blank",
+        );
         return;
       }
 
-      const response = await axios.post(
-        `${url}/receipts/${receipt._id}/generate-pdf`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await receiptService.generatePDF(receipt._id);
 
       if (response.data.success) {
         const downloadUrl =
           response.data.data.downloadUrl ||
-          `${url}/receipts/${receipt._id}/download-pdf`;
+          `${import.meta.env.VITE_BASE_URL}/receipts/${receipt._id}/download-pdf`;
         window.open(downloadUrl, "_blank");
         await fetchCollections();
         showToast(
@@ -457,249 +375,6 @@ export default function FeeCollection() {
       setIsLoading(false);
     }
   };
-
-  // Handle Sort
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    setShowFilterModal(false);
-    showToast("Filters applied successfully!", "success");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setStartDate("");
-    setEndDate("");
-    setSearchTerm("");
-    showToast("Filters reset!", "info");
-  };
-
-  // Reset Form
-  const resetForm = () => {
-    setPaymentData({
-      studentId: "",
-      feeType: "",
-      amount: "",
-      paymentMethod: "",
-      date: new Date().toISOString().split("T")[0],
-      note: "",
-    });
-    setSelectedStudent(null);
-    setErrors({});
-    setApiError("");
-    setShowEditModal(false);
-    setEditingCollection(null);
-  };
-
-  // Export Data
-  const handleExportData = () => {
-    const data = filteredCollections.map((c) => ({
-      "Receipt No": c.receipt,
-      Student: c.student,
-      Course: c.course,
-      Amount: c.amount,
-      "Payment Method": c.method,
-      Date: c.date,
-      Status: c.status,
-    }));
-    console.log("Exporting data:", data);
-    showToast("Data exported successfully!", "success");
-  };
-
-  // Get payment method icon
-  const getPaymentMethodIcon = (method) => {
-    const found = paymentMethods.find((m) => m.value === method);
-    return found ? found.icon : faCreditCard;
-  };
-
-  // Format collection data for table
-  const formatCollections = () => {
-    if (!collections || collections.length === 0) return [];
-
-    return collections.map((c) => {
-      const studentData = c.student || {};
-
-      return {
-        _id: c._id || `col-${Date.now()}-${Math.random()}`,
-        receipt:
-          c.receiptNo ||
-          `RCPT${String(c._id || "").slice(-6) || Date.now().toString().slice(-6)}`,
-        student: studentData.name || "Unknown Student",
-        course: studentData.course || "N/A",
-        amount: c.amount || 0,
-        method: c.paymentMethod || "N/A",
-        date: c.date ? new Date(c.date).toLocaleDateString("en-IN") : "N/A",
-        status: c.status || "Completed",
-        feeType: c.feeType || "Other",
-        transactionId: c.transactionId || "N/A",
-        pdfUrl: c.pdfUrl || null,
-        studentId: studentData._id || null,
-        note: c.note || "",
-        collectedBy: c.collectedBy?.username || "N/A",
-      };
-    });
-  };
-
-  // Sort collections
-  const sortCollections = (data) => {
-    return [...data].sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
-
-      if (sortField === "amount") {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      }
-
-      if (sortField === "date") {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-  };
-
-  // Filter collections
-  const filteredCollections = sortCollections(formatCollections()).filter(
-    (collection) => {
-      const matchesSearch =
-        collection.receipt.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        collection.student.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        collection.course.toLowerCase().includes(searchTerm.toLowerCase());
-
-      const matchesStatus =
-        selectedStatus === "all" || collection.status === selectedStatus;
-      const matchesMethod =
-        selectedMethod === "all" || collection.method === selectedMethod;
-
-      // Date range filter
-      let matchesDate = true;
-      if (startDate && endDate) {
-        const colDate = new Date(collection.date);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        matchesDate = colDate >= start && colDate <= end;
-      }
-
-      return matchesSearch && matchesStatus && matchesMethod && matchesDate;
-    },
-  );
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredCollections.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
-  const totalPages = Math.ceil(filteredCollections.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  // Table Columns
-  const columns = [
-    {
-      header: "Receipt No",
-      accessor: "receipt",
-    },
-    {
-      header: "Student",
-      accessor: "student",
-    },
-    {
-      header: "Course",
-      accessor: "course",
-    },
-    {
-      header: "Amount",
-      accessor: "amount",
-      render: (row) => `₹${row.amount?.toLocaleString() || 0}`,
-    },
-    {
-      header: "Payment Method",
-      accessor: "method",
-      render: (row) => (
-        <span className="flex items-center gap-1">
-          <FontAwesomeIcon
-            icon={getPaymentMethodIcon(row.method)}
-            className="text-gray-400"
-          />
-          {row.method}
-        </span>
-      ),
-    },
-    {
-      header: "Date",
-      accessor: "date",
-    },
-    {
-      header: "Status",
-      accessor: "status",
-      render: (row) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            row.status === "Completed"
-              ? "bg-green-100 text-green-700"
-              : row.status === "Pending"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-red-100 text-red-700"
-          }`}
-        >
-          {row.status}
-        </span>
-      ),
-    },
-    {
-      header: "Action",
-      accessor: "actions",
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleViewReceipt(row)}
-            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-            title="View Receipt"
-          >
-            <FontAwesomeIcon icon={faEye} />
-          </button>
-          <button
-            onClick={() => handleEditClick(row)}
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-            title="Edit"
-          >
-            <FontAwesomeIcon icon={faEdit} />
-          </button>
-          <button
-            onClick={() => handleDeleteClick(row._id)}
-            className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition"
-            title="Delete"
-          >
-            <FontAwesomeIcon icon={faTrash} />
-          </button>
-          <button
-            onClick={() => handleDownloadReceipt(row)}
-            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
-            title="Download PDF"
-          >
-            <FontAwesomeIcon icon={faDownload} />
-          </button>
-        </div>
-      ),
-    },
-  ];
-
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -1002,7 +677,6 @@ export default function FeeCollection() {
           </span>
         </div>
       </div>
-
     </div>
   );
 }

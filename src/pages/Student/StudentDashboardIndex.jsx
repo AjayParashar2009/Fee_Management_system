@@ -15,12 +15,11 @@ import {
   faArrowTrendDown,
   faSpinner,
   faBell,
+  faTimes,
 } from "@fortawesome/free-solid-svg-icons";
 import StatCards from "../../Components/Cards/StatCards";
 import Tables from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { authService } from "../../services/authService";
 
 export default function StudentDashboardIndex() {
   const theme = {
@@ -44,8 +43,6 @@ export default function StudentDashboardIndex() {
   const [notifications, setNotifications] = useState([]);
   const [apiError, setApiError] = useState("");
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -53,7 +50,7 @@ export default function StudentDashboardIndex() {
   const fetchDashboardData = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -61,12 +58,8 @@ export default function StudentDashboardIndex() {
         return;
       }
 
-      // Fetch student profile
-      const response = await axios.get(`${url}/auth/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // ✅ Using authService instead of direct axios
+      const response = await authService.getProfile();
 
       console.log("Student Data:", response.data);
 
@@ -131,18 +124,9 @@ export default function StudentDashboardIndex() {
 
   // Payment History Columns
   const paymentColumns = [
-    {
-      header: "Receipt",
-      accessor: "receipt",
-    },
-    {
-      header: "Date",
-      accessor: "date",
-    },
-    {
-      header: "Amount",
-      accessor: "amount",
-    },
+    { header: "Receipt", accessor: "receipt" },
+    { header: "Date", accessor: "date" },
+    { header: "Amount", accessor: "amount" },
     {
       header: "Status",
       accessor: "status",

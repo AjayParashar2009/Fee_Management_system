@@ -21,9 +21,7 @@ import {
   faArrowDown,
   faSort,
 } from "@fortawesome/free-solid-svg-icons";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { feeService } from "../../services/feeService";
 
 export default function PaymentHistory() {
   const [isLoading, setIsLoading] = useState(true);
@@ -43,8 +41,6 @@ export default function PaymentHistory() {
   const [endDate, setEndDate] = useState("");
   const [showFilterModal, setShowFilterModal] = useState(false);
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchPaymentHistory();
   }, []);
@@ -62,7 +58,7 @@ export default function PaymentHistory() {
   const fetchPaymentHistory = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -70,18 +66,13 @@ export default function PaymentHistory() {
         return;
       }
 
-      // Fetch fee collections from API
-      const response = await axios.get(`${url}/fee-collections`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      // ✅ Using feeService instead of direct axios
+      const response = await feeService.getAll();
 
       console.log("Payment History Response:", response.data);
 
       if (response.data.success) {
         const data = response.data.data || [];
-        // Format the data
         const formattedData = data.map((item) => ({
           _id: item._id,
           date: new Date(item.date).toLocaleDateString("en-IN"),
@@ -115,221 +106,6 @@ export default function PaymentHistory() {
       setIsLoading(false);
     }
   };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "Success":
-        return "bg-green-100 text-green-700";
-      case "Pending":
-        return "bg-yellow-100 text-yellow-700";
-      case "Failed":
-        return "bg-red-100 text-red-700";
-      default:
-        return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "Success":
-        return faCheckCircle;
-      case "Pending":
-        return faClock;
-      case "Failed":
-        return faTimes;
-      default:
-        return faClock;
-    }
-  };
-
-  // Handle Sort
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  const getSortIcon = (field) => {
-    if (sortField !== field) return faSort;
-    return sortDirection === "asc" ? faArrowUp : faArrowDown;
-  };
-
-  // Handle View Receipt
-  const handleViewReceipt = (payment) => {
-    setSelectedPayment(payment);
-    setShowReceiptModal(true);
-  };
-
-  // Handle Download Receipt
-  const handleDownloadReceipt = (payment) => {
-    if (payment.pdfUrl) {
-      window.open(`${url}${payment.pdfUrl}`, "_blank");
-      showToast(`Receipt ${payment.receiptNo} downloaded!`, "success");
-    } else {
-      showToast("Receipt PDF not available", "info");
-    }
-  };
-
-  // Handle Print Receipt
-  const handlePrintReceipt = (payment) => {
-    window.print();
-    showToast(`Printing receipt ${payment.receiptNo}...`, "info");
-  };
-
-  // Handle Refresh
-  const handleRefresh = () => {
-    fetchPaymentHistory();
-    showToast("Data refreshed!", "info");
-  };
-
-  // Handle Export
-  const handleExport = () => {
-    const exportData = filteredPayments.map((p) => ({
-      Date: p.date,
-      Amount: p.amount,
-      "Fee Type": p.feeType,
-      "Payment Method": p.paymentMethod,
-      "Receipt No": p.receiptNo,
-      Status: p.status,
-      "Transaction ID": p.transactionId,
-    }));
-    console.log("Exporting data:", exportData);
-    showToast("Data exported successfully!", "success");
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    setShowFilterModal(false);
-    showToast("Filters applied successfully!", "success");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setSelectedStatus("all");
-    setStartDate("");
-    setEndDate("");
-    setSearchTerm("");
-    showToast("Filters reset!", "info");
-  };
-
-  // Get filtered and sorted payments
-  const getFilteredPayments = () => {
-    let filtered = [...paymentHistory];
-
-    // Search filter
-    if (searchTerm) {
-      const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (p) =>
-          p.feeType?.toLowerCase().includes(search) ||
-          p.receiptNo?.toLowerCase().includes(search) ||
-          p.paymentMethod?.toLowerCase().includes(search),
-      );
-    }
-
-    // Status filter
-    if (selectedStatus !== "all") {
-      filtered = filtered.filter((p) => p.status === selectedStatus);
-    }
-
-    // Date range filter
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      filtered = filtered.filter((p) => {
-        const date = new Date(p.date);
-        return date >= start && date <= end;
-      });
-    }
-
-    // Sort
-    filtered = filtered.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
-
-      if (sortField === "amount") {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      }
-
-      if (sortField === "date") {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (typeof aVal === "string") {
-        aVal = aVal.toLowerCase();
-        bVal = bVal.toLowerCase();
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  };
-
-  const filteredPayments = getFilteredPayments();
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredPayments.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
-  const totalPages = Math.ceil(filteredPayments.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  const summaryCards = [
-    {
-      title: "Total Payments",
-      value: filteredPayments.length,
-      icon: faCalendarAlt,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
-    },
-    {
-      title: "Total Paid",
-      value: `₹${filteredPayments.reduce((sum, p) => sum + (p.amount || 0), 0).toLocaleString()}`,
-      icon: faIndianRupeeSign,
-      color: "text-green-600",
-      bg: "bg-green-100",
-    },
-    {
-      title: "Last Payment",
-      value: filteredPayments.length > 0 ? filteredPayments[0].date : "N/A",
-      icon: faClock,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
-    },
-    {
-      title: "Next Due Date",
-      value: "30 May 2024",
-      icon: faCalendarAlt,
-      color: "text-red-600",
-      bg: "bg-red-100",
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-purple-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading payment history...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">

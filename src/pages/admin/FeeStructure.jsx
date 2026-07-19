@@ -23,9 +23,7 @@ import {
   faPrint,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { feeStructureService } from "../../services/feeStructureService";
 
 export default function FeeStructure() {
   const theme = {
@@ -53,8 +51,6 @@ export default function FeeStructure() {
   const [filterCourse, setFilterCourse] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const getToken = () => localStorage.getItem("token");
-
   // Form State
   const [formData, setFormData] = useState({
     course: "",
@@ -76,11 +72,11 @@ export default function FeeStructure() {
     fetchFeeStructures();
   }, []);
 
-  // Fetch fee structures from API
+  // ✅ Fetch fee structures using feeStructureService
   const fetchFeeStructures = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -88,11 +84,7 @@ export default function FeeStructure() {
         return;
       }
 
-      const response = await axios.get(`${url}/fee-structures`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await feeStructureService.getAll();
 
       console.log("Fee Structures Response:", response.data);
 
@@ -161,14 +153,14 @@ export default function FeeStructure() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle Add Submit
+  // ✅ Handle Add Submit using feeStructureService
   const handleAddSubmit = async () => {
     if (!validateForm()) return;
 
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       const feeData = {
         course: formData.course,
@@ -182,12 +174,7 @@ export default function FeeStructure() {
         status: formData.status,
       };
 
-      const response = await axios.post(`${url}/fee-structures`, feeData, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const response = await feeStructureService.create(feeData);
 
       if (response.data.success) {
         await fetchFeeStructures();
@@ -228,14 +215,14 @@ export default function FeeStructure() {
     setApiError("");
   };
 
-  // Handle Edit Submit
+  // ✅ Handle Edit Submit using feeStructureService
   const handleEditSubmit = async () => {
     if (!validateForm()) return;
 
     try {
       setIsLoading(true);
       setApiError("");
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       const feeData = {
         course: formData.course,
@@ -249,15 +236,9 @@ export default function FeeStructure() {
         status: formData.status,
       };
 
-      const response = await axios.put(
-        `${url}/fee-structures/${selectedFee._id}`,
+      const response = await feeStructureService.update(
+        selectedFee._id,
         feeData,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
       );
 
       if (response.data.success) {
@@ -293,18 +274,11 @@ export default function FeeStructure() {
     setShowDeleteModal(true);
   };
 
-  // Handle Delete Confirm
+  // ✅ Handle Delete Confirm using feeStructureService
   const handleDeleteConfirm = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
-
-      await axios.delete(`${url}/fee-structures/${deleteId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
+      await feeStructureService.delete(deleteId);
       await fetchFeeStructures();
       setShowDeleteModal(false);
       setDeleteId(null);
@@ -349,18 +323,9 @@ export default function FeeStructure() {
 
   // Table Columns
   const columns = [
-    {
-      header: "Course",
-      accessor: "course",
-    },
-    {
-      header: "Semester",
-      accessor: "semester",
-    },
-    {
-      header: "Academic Year",
-      accessor: "academicYear",
-    },
+    { header: "Course", accessor: "course" },
+    { header: "Semester", accessor: "semester" },
+    { header: "Academic Year", accessor: "academicYear" },
     {
       header: "Tuition Fee",
       accessor: "tuitionFee",
@@ -465,7 +430,6 @@ export default function FeeStructure() {
       </div>
     );
   }
-
   return (
     <div className="space-y-6">
       {/* Header */}

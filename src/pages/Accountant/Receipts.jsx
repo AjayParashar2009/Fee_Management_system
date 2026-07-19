@@ -30,9 +30,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { faWhatsapp } from "@fortawesome/free-brands-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { receiptService } from "../../services/receiptService";
 
 export default function Receipts() {
   const theme = {
@@ -62,8 +60,6 @@ export default function Receipts() {
   const [sortField, setSortField] = useState("date");
   const [sortDirection, setSortDirection] = useState("desc");
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchReceipts();
   }, []);
@@ -78,10 +74,11 @@ export default function Receipts() {
     }, 3000);
   };
 
+  // ✅ Fetch Receipts using receiptService
   const fetchReceipts = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -89,9 +86,7 @@ export default function Receipts() {
         return;
       }
 
-      const response = await axios.get(`${url}/receipts`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await receiptService.getAll();
 
       console.log("Receipts Response:", response.data);
 
@@ -115,15 +110,16 @@ export default function Receipts() {
     }
   };
 
-  // Handle Download Receipt PDF
+  // ✅ Handle Download Receipt using receiptService
   const handleDownloadReceipt = async (receipt) => {
     try {
       setIsLoading(true);
-      const token = getToken();
 
-      // Check if PDF already exists
       if (receipt.pdfUrl) {
-        window.open(`${url}${receipt.pdfUrl}`, "_blank");
+        window.open(
+          `${import.meta.env.VITE_BASE_URL}${receipt.pdfUrl}`,
+          "_blank",
+        );
         showToast(
           `Receipt ${receipt.receiptNo} downloaded successfully!`,
           "success",
@@ -131,21 +127,12 @@ export default function Receipts() {
         return;
       }
 
-      // Generate PDF first
-      const response = await axios.post(
-        `${url}/receipts/${receipt._id}/generate-pdf`,
-        {},
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await receiptService.generatePDF(receipt._id);
 
       if (response.data.success) {
         const downloadUrl =
           response.data.data.downloadUrl ||
-          `${url}/receipts/${receipt._id}/download-pdf`;
+          `${import.meta.env.VITE_BASE_URL}/receipts/${receipt._id}/download-pdf`;
         window.open(downloadUrl, "_blank");
         await fetchReceipts();
         showToast(
@@ -161,39 +148,16 @@ export default function Receipts() {
     }
   };
 
-  // Handle Print Receipt
-  const handlePrintReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setTimeout(() => {
-      window.print();
-    }, 100);
-  };
-
-  // Handle Print All
-  const handlePrintAll = () => {
-    window.print();
-  };
-
-  // Handle Download All
+  // ✅ Handle Download All using receiptService
   const handleDownloadAll = async () => {
     try {
       setIsLoading(true);
       showToast("Preparing all receipts for download...", "info");
 
-      // Generate PDF for each receipt if not exists
-      const token = getToken();
       for (const receipt of receipts) {
         if (!receipt.pdfUrl) {
           try {
-            await axios.post(
-              `${url}/receipts/${receipt._id}/generate-pdf`,
-              {},
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              },
-            );
+            await receiptService.generatePDF(receipt._id);
           } catch (err) {
             console.error(
               "Error generating PDF for receipt:",
@@ -212,292 +176,6 @@ export default function Receipts() {
       setIsLoading(false);
     }
   };
-
-  // Handle View Receipt
-  const handleViewReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowReceiptModal(true);
-  };
-
-  // Handle Share Receipt
-  const handleShareReceipt = (receipt) => {
-    setSelectedReceipt(receipt);
-    setShowShareModal(true);
-  };
-
-  // Handle Send Email
-  const handleSendEmail = async () => {
-    try {
-      setIsLoading(true);
-      const token = getToken();
-
-      // First ensure PDF is generated
-      if (!selectedReceipt.pdfUrl) {
-        await axios.post(
-          `${url}/receipts/${selectedReceipt._id}/generate-pdf`,
-          {},
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-        await fetchReceipts();
-      }
-
-      showToast(
-        `Receipt sent to ${selectedReceipt?.student?.email || "student"}`,
-        "success",
-      );
-      setShowShareModal(false);
-    } catch (error) {
-      console.error("Email error:", error);
-      showToast("Failed to send email", "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle Send WhatsApp
-  const handleSendWhatsApp = () => {
-    const phone = selectedReceipt?.student?.phone || "";
-    const message = `Your receipt ${selectedReceipt?.receiptNo} is ready. Amount: ₹${selectedReceipt?.amount?.toLocaleString() || 0}`;
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, "_blank");
-    showToast("WhatsApp message sent!", "success");
-    setShowShareModal(false);
-  };
-
-  // Handle Copy Link
-  const handleCopyLink = () => {
-    const link = `${window.location.origin}/receipt/${selectedReceipt?.receiptNo}`;
-    navigator.clipboard.writeText(link);
-    showToast("Link copied to clipboard!", "success");
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    setShowFilterModal(false);
-    showToast("Filters applied successfully!", "success");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setStartDate("");
-    setEndDate("");
-    setSearchTerm("");
-    showToast("Filters reset!", "info");
-  };
-
-  // Handle Sort
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  // Get filtered and sorted receipts
-  const getFilteredReceipts = () => {
-    let filtered = receipts.filter((receipt) => {
-      const matchesSearch =
-        receipt.receiptNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        receipt.student?.name
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        receipt.student?.course
-          ?.toLowerCase()
-          .includes(searchTerm.toLowerCase());
-
-      const matchesStatus =
-        selectedStatus === "all" || receipt.status === selectedStatus;
-      const matchesMethod =
-        selectedMethod === "all" || receipt.paymentMethod === selectedMethod;
-
-      let matchesDate = true;
-      if (startDate && endDate) {
-        const receiptDate = new Date(receipt.date);
-        const start = new Date(startDate);
-        const end = new Date(endDate);
-        matchesDate = receiptDate >= start && receiptDate <= end;
-      }
-
-      return matchesSearch && matchesStatus && matchesMethod && matchesDate;
-    });
-
-    // Sort
-    filtered = filtered.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
-
-      if (sortField === "amount") {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      }
-
-      if (sortField === "date") {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  };
-
-  const filteredReceipts = getFilteredReceipts();
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredReceipts.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
-  const totalPages = Math.ceil(filteredReceipts.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  // Summary Cards
-  const summaryCards = [
-    {
-      title: "Total Receipts",
-      value: receipts.length,
-      subtitle: "All time",
-      icon: faReceipt,
-      color: "text-blue-600",
-      bg: "bg-blue-100",
-    },
-    {
-      title: "Generated",
-      value: receipts.filter((r) => r.status === "Generated").length,
-      subtitle: "Ready to download",
-      icon: faFilePdf,
-      color: "text-green-600",
-      bg: "bg-green-100",
-    },
-    {
-      title: "Pending",
-      value: receipts.filter((r) => r.status === "Pending").length,
-      subtitle: "Awaiting generation",
-      icon: faClock,
-      color: "text-yellow-600",
-      bg: "bg-yellow-100",
-    },
-    {
-      title: "Total Amount",
-      value: `₹${receipts.reduce((sum, r) => sum + (r.amount || 0), 0).toLocaleString()}`,
-      subtitle: "All receipts",
-      icon: faIndianRupeeSign,
-      color: "text-purple-600",
-      bg: "bg-purple-100",
-    },
-  ];
-
-  // Table Columns
-  const columns = [
-    {
-      header: "Receipt No",
-      accessor: "receiptNo",
-    },
-    {
-      header: "Student",
-      accessor: "student",
-      render: (row) => row.student?.name || "N/A",
-    },
-    {
-      header: "Course",
-      accessor: "student",
-      render: (row) => row.student?.course || "N/A",
-    },
-    {
-      header: "Amount",
-      accessor: "amount",
-      render: (row) => `₹${row.amount?.toLocaleString() || 0}`,
-    },
-    {
-      header: "Date",
-      accessor: "date",
-      render: (row) => new Date(row.date).toLocaleDateString("en-IN"),
-    },
-    {
-      header: "Payment Method",
-      accessor: "paymentMethod",
-    },
-    {
-      header: "Status",
-      accessor: "status",
-      render: (row) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            row.status === "Generated"
-              ? "bg-green-100 text-green-700"
-              : "bg-yellow-100 text-yellow-700"
-          }`}
-        >
-          {row.status}
-        </span>
-      ),
-    },
-    {
-      header: "Action",
-      accessor: "actions",
-      render: (row) => (
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => handleViewReceipt(row)}
-            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-            title="View"
-          >
-            <FontAwesomeIcon icon={faEye} />
-          </button>
-          <button
-            onClick={() => handlePrintReceipt(row)}
-            className="p-1.5 text-gray-600 hover:bg-gray-50 rounded-lg transition"
-            title="Print"
-          >
-            <FontAwesomeIcon icon={faPrint} />
-          </button>
-          <button
-            onClick={() => handleDownloadReceipt(row)}
-            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition"
-            title="Download PDF"
-          >
-            <FontAwesomeIcon icon={faDownload} />
-          </button>
-          <button
-            onClick={() => handleShareReceipt(row)}
-            className="p-1.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
-            title="Share"
-          >
-            <FontAwesomeIcon icon={faShare} />
-          </button>
-        </div>
-      ),
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-blue-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading receipts...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Toast Notification */}

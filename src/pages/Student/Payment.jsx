@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faSpinner,
@@ -10,11 +9,9 @@ import {
   faWallet,
   faUniversity,
   faMobileAlt,
-  faRupeeSign,
   faLock,
 } from "@fortawesome/free-solid-svg-icons";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { paymentService } from "../../services/paymentService";
 
 export default function Payment() {
   const [isLoading, setIsLoading] = useState(false);
@@ -25,8 +22,6 @@ export default function Payment() {
     feeType: "",
     studentId: "",
   });
-
-  const getToken = () => localStorage.getItem("token");
 
   // Load Razorpay script
   useEffect(() => {
@@ -58,23 +53,12 @@ export default function Payment() {
     setError("");
 
     try {
-      const token = getToken();
-
-      // Create order
-      const response = await axios.post(
-        `${url}/payments/create-order`,
-        {
-          amount: parseFloat(paymentData.amount),
-          feeType: paymentData.feeType,
-          studentId: paymentData.studentId,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      // ✅ Using paymentService instead of direct axios
+      const response = await paymentService.createOrder({
+        amount: parseFloat(paymentData.amount),
+        feeType: paymentData.feeType,
+        studentId: paymentData.studentId,
+      });
 
       if (response.data.success) {
         const { orderId, amount, key } = response.data.data;
@@ -126,25 +110,15 @@ export default function Payment() {
 
   const verifyPayment = async (orderId, paymentId, signature) => {
     try {
-      const token = getToken();
-
-      const response = await axios.post(
-        `${url}/payments/verify`,
-        {
-          orderId,
-          paymentId,
-          signature,
-          studentId: paymentData.studentId,
-          feeType: paymentData.feeType,
-          amount: parseFloat(paymentData.amount),
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      // ✅ Using paymentService instead of direct axios
+      const response = await paymentService.verifyPayment({
+        orderId,
+        paymentId,
+        signature,
+        studentId: paymentData.studentId,
+        feeType: paymentData.feeType,
+        amount: parseFloat(paymentData.amount),
+      });
 
       if (response.data.success) {
         setPaymentStatus({
@@ -153,7 +127,6 @@ export default function Payment() {
           receipt: response.data.data.receipt,
         });
         alert("Payment successful!");
-        // Redirect to receipts page
         window.location.href = "/student-dashboard/receipts";
       }
     } catch (error) {
@@ -166,7 +139,6 @@ export default function Payment() {
       setIsLoading(false);
     }
   };
-
   return (
     <div className="max-w-2xl mx-auto p-6">
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">

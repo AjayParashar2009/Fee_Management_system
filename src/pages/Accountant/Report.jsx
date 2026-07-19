@@ -35,9 +35,7 @@ import {
   faInfoCircle,
 } from "@fortawesome/free-solid-svg-icons";
 import Table from "../../Components/Table/Tables";
-import axios from "axios";
-
-const url = import.meta.env.VITE_BASE_URL;
+import { reportService } from "../../services/reportService";
 
 export default function Reports() {
   const theme = {
@@ -83,8 +81,6 @@ export default function Reports() {
   const [paymentMethods, setPaymentMethods] = useState([]);
   const [monthlyRevenue, setMonthlyRevenue] = useState([]);
 
-  const getToken = () => localStorage.getItem("token");
-
   useEffect(() => {
     fetchReportData();
   }, []);
@@ -99,10 +95,11 @@ export default function Reports() {
     }, 3000);
   };
 
+  // ✅ Fetch Report Data using reportService
   const fetchReportData = async () => {
     try {
       setIsLoading(true);
-      const token = getToken();
+      const token = localStorage.getItem("token");
 
       if (!token) {
         setApiError("Please login first");
@@ -110,17 +107,13 @@ export default function Reports() {
         return;
       }
 
-      // Fetch dashboard stats
-      const statsResponse = await axios.get(`${url}/reports/dashboard`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const response = await reportService.getDashboard();
 
-      console.log("Report Data:", statsResponse.data);
+      console.log("Report Data:", response.data);
 
-      if (statsResponse.data.success) {
-        const data = statsResponse.data.data;
+      if (response.data.success) {
+        const data = response.data.data;
 
-        // Set summary
         setReportData({
           summary: {
             totalStudents: data.students?.total || 0,
@@ -142,7 +135,6 @@ export default function Reports() {
           collections: data.recentCollections || [],
         });
 
-        // Set transaction data from recent collections
         if (data.recentCollections && data.recentCollections.length > 0) {
           setTransactionData(
             data.recentCollections.map((item) => ({
@@ -160,7 +152,6 @@ export default function Reports() {
           );
         }
 
-        // Set fee breakdown
         setFeeBreakdown([
           { type: "Tuition Fee", amount: 320000, percentage: 60.1 },
           { type: "Admission Fee", amount: 85000, percentage: 16.0 },
@@ -169,7 +160,6 @@ export default function Reports() {
           { type: "Other Fee", amount: 30000, percentage: 5.7 },
         ]);
 
-        // Set payment methods
         setPaymentMethods([
           { name: "UPI", count: 72, percentage: 46 },
           { name: "Credit Card", count: 45, percentage: 29 },
@@ -178,7 +168,6 @@ export default function Reports() {
           { name: "Debit Card", count: 4, percentage: 3 },
         ]);
 
-        // Set monthly revenue
         setMonthlyRevenue([
           { month: "Jan", amount: 42000 },
           { month: "Feb", amount: 38000 },
@@ -214,235 +203,6 @@ export default function Reports() {
       setIsLoading(false);
     }
   };
-
-  // Handle Sort
-  const handleSort = (field) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  // Handle View Transaction
-  const handleViewTransaction = (row) => {
-    alert(
-      `📄 Transaction Details\n\nReceipt: ${row.receiptId}\nStudent: ${row.student}\nCourse: ${row.course}\nAmount: ₹${row.amount?.toLocaleString() || 0}\nDate: ${row.date}\nMethod: ${row.method}\nStatus: ${row.status}`,
-    );
-  };
-
-  // Handle Export
-  const handleExport = async (format) => {
-    try {
-      setIsLoading(true);
-      const token = getToken();
-
-      // Prepare data for export
-      const exportData = filteredTransactions.map((t) => ({
-        "Receipt ID": t.receiptId,
-        Student: t.student,
-        Course: t.course,
-        "Fee Type": t.feeType,
-        Amount: t.amount,
-        Date: t.date,
-        Method: t.method,
-        Status: t.status,
-      }));
-
-      console.log(`Exporting ${format}:`, exportData);
-
-      // Simulate export delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-
-      setShowExportModal(false);
-      showToast(`Report exported as ${format} successfully!`, "success");
-    } catch (error) {
-      console.error("Export error:", error);
-      showToast(`Failed to export as ${format}`, "error");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle Apply Filters
-  const handleApplyFilters = () => {
-    showToast("Filters applied successfully!", "success");
-  };
-
-  // Handle Reset Filters
-  const handleResetFilters = () => {
-    setStartDate("");
-    setEndDate("");
-    setSelectedCourse("all");
-    setSelectedStatus("all");
-    setSelectedMethod("all");
-    setSearchTerm("");
-    setCurrentPage(1);
-    showToast("Filters reset!", "info");
-  };
-
-  // Handle Date Range Apply
-  const handleApplyDateRange = () => {
-    setShowDateRangeModal(false);
-    showToast("Date range applied successfully!", "success");
-  };
-
-  // Handle Refresh
-  const handleRefresh = () => {
-    fetchReportData();
-    showToast("Data refreshed!", "info");
-  };
-
-  // Get filtered transactions
-  const getFilteredTransactions = () => {
-    let filtered = [...transactionData];
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (t) =>
-          t.receiptId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.student?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          t.course?.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
-    }
-
-    // Status filter
-    if (selectedStatus !== "all") {
-      filtered = filtered.filter((t) => t.status === selectedStatus);
-    }
-
-    // Method filter
-    if (selectedMethod !== "all") {
-      filtered = filtered.filter((t) => t.method === selectedMethod);
-    }
-
-    // Date range filter
-    if (startDate && endDate) {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      filtered = filtered.filter((t) => {
-        const date = new Date(t.date);
-        return date >= start && date <= end;
-      });
-    }
-
-    // Sort
-    filtered = filtered.sort((a, b) => {
-      let aVal = a[sortField];
-      let bVal = b[sortField];
-
-      if (sortField === "amount") {
-        aVal = parseFloat(aVal) || 0;
-        bVal = parseFloat(bVal) || 0;
-      }
-
-      if (sortField === "date") {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
-
-      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
-      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
-      return 0;
-    });
-
-    return filtered;
-  };
-
-  const filteredTransactions = getFilteredTransactions();
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filteredTransactions.slice(
-    indexOfFirstItem,
-    indexOfLastItem,
-  );
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  // Table Columns with sort functionality
-  const columns = [
-    {
-      header: "Receipt ID",
-      accessor: "receiptId",
-    },
-    {
-      header: "Student",
-      accessor: "student",
-    },
-    {
-      header: "Course",
-      accessor: "course",
-    },
-    {
-      header: "Fee Type",
-      accessor: "feeType",
-    },
-    {
-      header: "Amount",
-      accessor: "amount",
-      render: (row) => `₹${row.amount?.toLocaleString() || 0}`,
-    },
-    {
-      header: "Date",
-      accessor: "date",
-    },
-    {
-      header: "Method",
-      accessor: "method",
-    },
-    {
-      header: "Status",
-      accessor: "status",
-      render: (row) => (
-        <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${
-            row.status === "Completed" || row.status === "Paid"
-              ? "bg-green-100 text-green-700"
-              : row.status === "Pending"
-                ? "bg-yellow-100 text-yellow-700"
-                : "bg-red-100 text-red-700"
-          }`}
-        >
-          {row.status}
-        </span>
-      ),
-    },
-    {
-      header: "Action",
-      accessor: "actions",
-      render: (row) => (
-        <button
-          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-          title="View Details"
-          onClick={() => handleViewTransaction(row)}
-        >
-          <FontAwesomeIcon icon={faEye} />
-        </button>
-      ),
-    },
-  ];
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <FontAwesomeIcon
-            icon={faSpinner}
-            className="text-4xl text-blue-600 animate-spin mb-3"
-          />
-          <p className="text-gray-500">Loading report data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const summaryData = reportData.summary;
-
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
