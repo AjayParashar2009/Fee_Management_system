@@ -11,7 +11,7 @@ import {
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 
-const url = import.meta.env.VITE_BASE_URL;
+const url = import.meta.env.VITE_BASE_URL || `${window.location.origin}/api`;
 
 export default function Login() {
   const [loginData, setLoginData] = useState({
