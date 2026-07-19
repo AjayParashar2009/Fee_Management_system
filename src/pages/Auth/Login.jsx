@@ -11,7 +11,8 @@ import {
   faArrowLeft,
 } from "@fortawesome/free-solid-svg-icons";
 
-const url = import.meta.env.VITE_BASE_URL || `${window.location.origin}/api`;
+const url = import.meta.env.VITE_BASE_URL || "http://localhost:3000";
+console.log("API URL:", url); // For debugging
 
 export default function Login() {
   const [loginData, setLoginData] = useState({
@@ -61,7 +62,7 @@ export default function Login() {
     setApiError("");
 
     axios
-      .post(`${url}/auth/login`, loginData) // ✅ No role in request
+      .post(`${url}/api/auth/login`, loginData)
       .then((res) => {
         console.log("Full Response:", res);
         console.log("Response Data:", res.data);
@@ -72,7 +73,7 @@ export default function Login() {
           localStorage.setItem("token", token);
           localStorage.setItem("user", JSON.stringify(user));
 
-          // ✅ Navigate based on role from response
+          // Navigate based on role from response
           const userRole = user.role;
 
           switch (userRole) {
