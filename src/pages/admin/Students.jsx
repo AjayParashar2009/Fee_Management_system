@@ -175,6 +175,7 @@ const Students = () => {
         }
       }
     } catch (error) {
+      console.error("❌ Create error:", error);
       setApiError(error.response?.data?.message || "Failed to create student");
     } finally {
       setIsSaving(false);
