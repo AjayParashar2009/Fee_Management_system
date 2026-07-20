@@ -65,7 +65,11 @@ const Accountants = () => {
   const [errors, setErrors] = useState({});
 
   // Stats
-  const [stats, setStats] = useState({ total: 0, active: 0, inactive: 0 });
+  const [stats, setStats] = useState({
+    total: 0,
+    active: 0,
+    inactive: 0,
+  });
 
   useEffect(() => {
     fetchAccountants();
@@ -77,11 +81,16 @@ const Accountants = () => {
       const response = await accountantAPI.getAll();
       if (response.data.success) {
         const data = response.data.data || [];
-        setAccountants(data);
+        const formattedData = data.map((accountant) => ({
+          ...accountant,
+          email: accountant.email || accountant.user?.email || "N/A",
+          employeeId: accountant.employeeId || "N/A",
+        }));
+        setAccountants(formattedData);
         setStats({
-          total: data.length,
-          active: data.filter((s) => s.status === "Active").length,
-          inactive: data.filter((s) => s.status === "Inactive").length,
+          total: formattedData.length,
+          active: formattedData.filter((s) => s.status === "Active").length,
+          inactive: formattedData.filter((s) => s.status === "Inactive").length,
         });
       }
     } catch (error) {
@@ -115,34 +124,55 @@ const Accountants = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // ✅ Copy to clipboard
+  // Copy to clipboard
   const copyToClipboard = (text) => {
     navigator.clipboard.writeText(text);
     alert("Copied to clipboard!");
   };
 
-  // ✅ Handle Create with Credentials
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
+
     setIsSaving(true);
     setApiError("");
     try {
-      const response = await accountantAPI.create(formData);
+      const accountantData = {
+        username: formData.username.trim(),
+        email: formData.email.trim().toLowerCase(),
+        password: formData.password || undefined,
+        name: formData.name.trim(),
+        phone: formData.phone.trim(),
+        department: formData.department,
+        address: formData.address?.trim() || "",
+        employeeId: formData.employeeId?.trim() || undefined,
+        joinDate: formData.joinDate || undefined,
+      };
+
+      console.log("📤 Creating accountant with data:", accountantData);
+
+      const response = await accountantAPI.create(accountantData);
+
+      console.log("📥 Response:", response.data);
+
       if (response.data.success) {
         await fetchAccountants();
         resetForm();
         setShowAddModal(false);
 
-        // ✅ Show credentials modal
         if (response.data.credentials) {
-          setNewCredentials(response.data.credentials);
+          setNewCredentials({
+            ...response.data.credentials,
+            employeeId:
+              response.data.credentials.employeeId || "Auto-generated",
+          });
           setShowCredentialsModal(true);
         } else {
           alert("✅ Accountant created successfully!");
         }
       }
     } catch (error) {
+      console.error("❌ Create error:", error);
       setApiError(
         error.response?.data?.message || "Failed to create accountant",
       );
@@ -217,7 +247,7 @@ const Accountants = () => {
     setEditingAccountant(accountant);
     setFormData({
       username: accountant.username || "",
-      email: accountant.email || "",
+      email: accountant.email || accountant.user?.email || "",
       password: "",
       confirmPassword: "",
       name: accountant.name || "",
@@ -246,14 +276,26 @@ const Accountants = () => {
     (a) =>
       a.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      a.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.department?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const columns = [
-    { header: "Employee ID", accessor: "employeeId" },
+    {
+      header: "Employee ID",
+      accessor: "employeeId",
+      render: (row) => row.employeeId || "N/A",
+    },
     { header: "Name", accessor: "name" },
-    { header: "Email", accessor: "email" },
+    {
+      header: "Email",
+      accessor: "email",
+      render: (row) => {
+        const email = row.email || row.user?.email;
+        return email || "N/A";
+      },
+    },
     { header: "Phone", accessor: "phone" },
     { header: "Department", accessor: "department" },
     {
@@ -261,7 +303,11 @@ const Accountants = () => {
       accessor: "status",
       render: (row) => (
         <span
-          className={`px-3 py-1 rounded-full text-xs font-semibold ${row.status === "Active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+          className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            row.status === "Active"
+              ? "bg-green-100 text-green-700"
+              : "bg-red-100 text-red-700"
+          }`}
         >
           {row.status}
         </span>
@@ -407,6 +453,12 @@ const Accountants = () => {
           <button className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600">
             <Filter size={18} /> Filter
           </button>
+          <button
+            onClick={() => setSearchTerm("")}
+            className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-2 text-gray-600"
+          >
+            <X size={18} /> Clear
+          </button>
         </div>
       </div>
 
@@ -415,7 +467,7 @@ const Accountants = () => {
         <div className="overflow-x-auto">
           <div className="max-h-[500px] overflow-y-auto">
             <Table
-              title="Accountant List"
+              title="Accountants List"
               columns={columns}
               data={filteredAccountants}
               showViewAll={false}
@@ -435,8 +487,8 @@ const Accountants = () => {
             <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <User size={20} className="text-emerald-600" /> Add New
-                  Accountant
+                  <User size={20} className="text-emerald-600" />
+                  Add New Accountant
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Fill in the details to create a new accountant account
@@ -452,6 +504,7 @@ const Accountants = () => {
                 <X size={20} />
               </button>
             </div>
+
             <div className="p-6">
               <form
                 onSubmit={handleCreate}
@@ -590,16 +643,24 @@ const Accountants = () => {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Employee ID
+                    Employee ID (optional)
                   </label>
                   <input
                     type="text"
                     name="employeeId"
                     className="input-field"
-                    placeholder="Enter employee ID"
+                    placeholder="Enter employee ID (optional)"
                     value={formData.employeeId}
                     onChange={handleInputChange}
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Leave blank to auto-generate
+                  </p>
+                  {errors.employeeId && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.employeeId}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -651,15 +712,15 @@ const Accountants = () => {
         </div>
       )}
 
-      {/* Edit Modal */}
+      {/* Edit Accountant Modal */}
       {showEditModal && editingAccountant && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Edit size={20} className="text-emerald-600" /> Edit
-                  Accountant
+                  <Edit size={20} className="text-emerald-600" />
+                  Edit Accountant
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
                   Update accountant information - {editingAccountant.name}
@@ -676,12 +737,12 @@ const Accountants = () => {
                 <X size={20} />
               </button>
             </div>
+
             <div className="p-6">
               <form
                 onSubmit={handleUpdate}
                 className="grid grid-cols-1 md:grid-cols-2 gap-4"
               >
-                {/* Same fields as add modal but password optional */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Username *
@@ -800,6 +861,11 @@ const Accountants = () => {
                     value={formData.employeeId}
                     onChange={handleInputChange}
                   />
+                  {errors.employeeId && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.employeeId}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -852,19 +918,18 @@ const Accountants = () => {
         </div>
       )}
 
-      {/* View Modal */}
+      {/* View Accountant Modal */}
       {showViewModal && selectedAccountant && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white z-10 px-6 py-4 border-b border-gray-100 flex items-center justify-between rounded-t-2xl">
               <div>
                 <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <User size={20} className="text-emerald-600" /> Accountant
-                  Details
+                  <User size={20} className="text-emerald-600" />
+                  Accountant Details
                 </h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  #{selectedAccountant.employeeId || "N/A"} •{" "}
-                  {selectedAccountant.name}
+                  #{selectedAccountant.employeeId} • {selectedAccountant.name}
                 </p>
               </div>
               <button
@@ -877,6 +942,7 @@ const Accountants = () => {
                 <X size={20} />
               </button>
             </div>
+
             <div className="p-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -894,7 +960,9 @@ const Accountants = () => {
                 <div>
                   <p className="text-xs text-gray-500">Email</p>
                   <p className="font-medium text-gray-800">
-                    {selectedAccountant.email}
+                    {selectedAccountant.email ||
+                      selectedAccountant.user?.email ||
+                      "N/A"}
                   </p>
                 </div>
                 <div>
@@ -912,7 +980,11 @@ const Accountants = () => {
                 <div>
                   <p className="text-xs text-gray-500">Status</p>
                   <span
-                    className={`px-3 py-1 rounded-full text-xs font-semibold ${selectedAccountant.status === "Active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                      selectedAccountant.status === "Active"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
                   >
                     {selectedAccountant.status}
                   </span>
@@ -934,6 +1006,7 @@ const Accountants = () => {
                   </div>
                 )}
               </div>
+
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={() => {
@@ -996,7 +1069,7 @@ const Accountants = () => {
         </div>
       )}
 
-      {/* ✅ Credentials Modal */}
+      {/* Credentials Modal */}
       {showCredentialsModal && newCredentials && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -1052,6 +1125,12 @@ const Accountants = () => {
                   <p className="text-xs text-gray-500">Email</p>
                   <p className="text-sm text-gray-800">
                     {newCredentials.email}
+                  </p>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500">Employee ID</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {newCredentials.employeeId || "Auto-generated"}
                   </p>
                 </div>
                 <div className="bg-white p-2 rounded-lg border border-gray-100">
