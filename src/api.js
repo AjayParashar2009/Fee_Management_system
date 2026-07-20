@@ -76,7 +76,6 @@ export const studentAPI = {
   delete: (id) => API.delete(`/students/${id}`),
   getFees: (id) => API.get(`/students/${id}/fees`),
 };
-
 // ============================================
 // ACCOUNTANT API
 // ============================================

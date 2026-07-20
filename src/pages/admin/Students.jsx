@@ -62,6 +62,7 @@ const Students = () => {
     phone: "",
     address: "",
     dob: "",
+    enrollmentNo: "",
   });
   const [errors, setErrors] = useState({});
 
@@ -82,11 +83,16 @@ const Students = () => {
       const response = await studentAPI.getAll();
       if (response.data.success) {
         const data = response.data.data || [];
-        setStudents(data);
+        const formattedData = data.map((student) => ({
+          ...student,
+          email: student.email || student.user?.email || "N/A",
+          enrollmentNo: student.enrollmentNo || "N/A",
+        }));
+        setStudents(formattedData);
         setStats({
-          total: data.length,
-          active: data.filter((s) => s.status === "Active").length,
-          inactive: data.filter((s) => s.status === "Inactive").length,
+          total: formattedData.length,
+          active: formattedData.filter((s) => s.status === "Active").length,
+          inactive: formattedData.filter((s) => s.status === "Inactive").length,
         });
       }
     } catch (error) {
@@ -126,7 +132,6 @@ const Students = () => {
     alert("Copied to clipboard!");
   };
 
-  // ✅ Handle Create with Credentials
   const handleCreate = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
@@ -144,17 +149,26 @@ const Students = () => {
         phone: formData.phone.trim(),
         address: formData.address?.trim() || "",
         dob: formData.dob || "",
+        enrollmentNo: formData.enrollmentNo?.trim() || undefined,
       };
 
+      console.log("📤 Creating student with data:", studentData);
+
       const response = await studentAPI.create(studentData);
+
+      console.log("📥 Response:", response.data);
+
       if (response.data.success) {
         await fetchStudents();
         resetForm();
         setShowAddModal(false);
 
-        // ✅ Show credentials modal
         if (response.data.credentials) {
-          setNewCredentials(response.data.credentials);
+          setNewCredentials({
+            ...response.data.credentials,
+            enrollmentNo:
+              response.data.credentials.enrollmentNo || "Auto-generated",
+          });
           setShowCredentialsModal(true);
         } else {
           alert("✅ Student created successfully!");
@@ -219,6 +233,7 @@ const Students = () => {
       phone: "",
       address: "",
       dob: "",
+      enrollmentNo: "",
     });
     setErrors({});
     setApiError("");
@@ -228,7 +243,7 @@ const Students = () => {
     setEditingStudent(student);
     setFormData({
       username: student.username || "",
-      email: student.email || "",
+      email: student.email || student.user?.email || "",
       password: "",
       confirmPassword: "",
       name: student.name || "",
@@ -237,6 +252,7 @@ const Students = () => {
       phone: student.phone || "",
       address: student.address || "",
       dob: student.dob || "",
+      enrollmentNo: student.enrollmentNo || "",
     });
     setShowEditModal(true);
     setErrors({});
@@ -257,14 +273,26 @@ const Students = () => {
     (s) =>
       s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      s.user?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.enrollmentNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.course?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const columns = [
-    { header: "Enrollment", accessor: "enrollmentNo" },
+    {
+      header: "Enrollment",
+      accessor: "enrollmentNo",
+      render: (row) => row.enrollmentNo || "N/A",
+    },
     { header: "Name", accessor: "name" },
-    { header: "Email", accessor: "email" },
+    {
+      header: "Email",
+      accessor: "email",
+      render: (row) => {
+        const email = row.email || row.user?.email;
+        return email || "N/A";
+      },
+    },
     { header: "Course", accessor: "course" },
     { header: "Semester", accessor: "semester" },
     { header: "Phone", accessor: "phone" },
@@ -649,6 +677,30 @@ const Students = () => {
                     onChange={handleInputChange}
                   />
                 </div>
+
+                {/* Enrollment Number Field */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Enrollment Number
+                  </label>
+                  <input
+                    type="text"
+                    name="enrollmentNo"
+                    className="input-field"
+                    placeholder="Enter enrollment number (optional)"
+                    value={formData.enrollmentNo}
+                    onChange={handleInputChange}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Leave blank to auto-generate
+                  </p>
+                  {errors.enrollmentNo && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.enrollmentNo}
+                    </p>
+                  )}
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Address
@@ -862,6 +914,27 @@ const Students = () => {
                     onChange={handleInputChange}
                   />
                 </div>
+
+                {/* Enrollment Number in Edit Modal */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Enrollment Number
+                  </label>
+                  <input
+                    type="text"
+                    name="enrollmentNo"
+                    className="input-field"
+                    placeholder="Enter enrollment number"
+                    value={formData.enrollmentNo}
+                    onChange={handleInputChange}
+                  />
+                  {errors.enrollmentNo && (
+                    <p className="text-red-500 text-xs mt-1">
+                      {errors.enrollmentNo}
+                    </p>
+                  )}
+                </div>
+
                 <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Address
@@ -949,7 +1022,9 @@ const Students = () => {
                 <div>
                   <p className="text-xs text-gray-500">Email</p>
                   <p className="font-medium text-gray-800">
-                    {selectedStudent.email}
+                    {selectedStudent.email ||
+                      selectedStudent.user?.email ||
+                      "N/A"}
                   </p>
                 </div>
                 <div>
@@ -1088,7 +1163,7 @@ const Students = () => {
         </div>
       )}
 
-      {/* ✅ Credentials Modal */}
+      {/* Credentials Modal */}
       {showCredentialsModal && newCredentials && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl w-full max-w-md p-6">
@@ -1144,6 +1219,12 @@ const Students = () => {
                   <p className="text-xs text-gray-500">Email</p>
                   <p className="text-sm text-gray-800">
                     {newCredentials.email}
+                  </p>
+                </div>
+                <div className="bg-white p-2 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500">Enrollment No</p>
+                  <p className="text-sm font-semibold text-gray-800">
+                    {newCredentials.enrollmentNo || "Auto-generated"}
                   </p>
                 </div>
                 <div className="bg-white p-2 rounded-lg border border-gray-100">
